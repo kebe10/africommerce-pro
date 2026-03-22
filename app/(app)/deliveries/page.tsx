@@ -44,12 +44,14 @@ export default function DeliveriesPage() {
   }
 
   const cities = useMemo(() => {
-    const unique = new Set(allOrders.map(o => o.customer_city).filter(Boolean));
+    // On force le type string avec "as string[]"
+    const unique = new Set(allOrders.map(o => o.customer_city).filter(Boolean) as string[]);
     return ['all', ...Array.from(unique)];
   }, [allOrders]);
 
   const carriers = useMemo(() => {
-    const unique = new Set(allOrders.map(o => o.carrier).filter(Boolean));
+    // On force le type string avec "as string[]"
+    const unique = new Set(allOrders.map(o => o.carrier).filter(Boolean) as string[]);
     return ['all', ...Array.from(unique)];
   }, [allOrders]);
 
