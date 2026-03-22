@@ -1,0 +1,235 @@
+'use client';
+
+import { useEffect, useState, useMemo } from 'react';
+import { supabase } from '@/lib/supabase';
+import { formatMoney } from '@/lib/utils';
+import { Plus, X, TrendingUp, Users, DollarSign, Target, AlertCircle, Edit2, Trash2, Search, Download, CheckCircle, XCircle } from 'lucide-react';
+
+type Campaign = {
+  id: string;
+  name: string;
+  platform: string;
+  budget_spent: number;
+  orders_generated: number;
+  start_date: string;
+  end_date: string | null;
+};
+
+export default function CampaignsPage() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [globalAOV, setGlobalAOV] = useState<number>(15000);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Filtres
+  const [searchQuery, setSearchQuery] = useState('');
+  const [platformFilter, setPlatformFilter] = useState('all');
+
+  const emptyForm = { name: '', platform: 'facebook', budget_spent: 0, orders_generated: 0, start_date: new Date().toISOString().split('T')[0], end_date: '' };
+  const [formData, setFormData] = useState(emptyForm);
+
+  useEffect(() => {
+    fetchCampaigns();
+    calculateAOV();
+  }, []);
+
+  async function calculateAOV() {
+    const { data } = await supabase.from('orders').select('total_amount').eq('status', 'delivered');
+    if (data && data.length > 0) {
+      const totalRevenue = data.reduce((sum, o) => sum + o.total_amount, 0);
+      setGlobalAOV(totalRevenue / data.length);
+    }
+  }
+
+  async function fetchCampaigns() {
+    setLoading(true);
+    const { data } = await supabase.from('ad_campaigns').select('*').order('created_at', { ascending: false });
+    if (data) setCampaigns(data);
+    setLoading(false);
+  }
+
+  // --- Actions ---
+  const openAddModal = () => {
+    setFormData(emptyForm);
+    setIsEditing(false);
+    setEditingId(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (campaign: Campaign) => {
+    setFormData({
+      name: campaign.name,
+      platform: campaign.platform,
+      budget_spent: campaign.budget_spent,
+      orders_generated: campaign.orders_generated,
+      start_date: campaign.start_date,
+      end_date: campaign.end_date || ''
+    });
+    setIsEditing(true);
+    setEditingId(campaign.id);
+    setIsModalOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let error;
+    if (isEditing && editingId) {
+      const result = await supabase.from('ad_campaigns').update(formData).eq('id', editingId);
+      error = result.error;
+    } else {
+      const result = await supabase.from('ad_campaigns').insert([formData]);
+      error = result.error;
+    }
+
+    if (error) alert("Erreur: " + error.message);
+    else { setIsModalOpen(false); fetchCampaigns(); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Supprimer cette campagne ?")) return;
+    await supabase.from('ad_campaigns').delete().eq('id', id);
+    fetchCampaigns();
+  };
+
+  // --- Export Excel ---
+  const exportToCSV = () => {
+    if (filteredCampaigns.length === 0) return alert("Aucune donnée à exporter.");
+    
+    const headers = ["Nom", "Plateforme", "Budget (FCFA)", "Commandes", "CAC (FCFA)", "ROAS", "Statut", "Début", "Fin"];
+    const rows = filteredCampaigns.map(c => {
+        const cac = c.orders_generated > 0 ? c.budget_spent / c.orders_generated : 0;
+        const roas = c.budget_spent > 0 ? (c.orders_generated * globalAOV) / c.budget_spent : 0;
+        const isActive = !c.end_date || new Date(c.end_date) >= new Date();
+        return [
+            c.name, c.platform, c.budget_spent, c.orders_generated, 
+            cac.toFixed(0), roas.toFixed(2), 
+            isActive ? 'Active' : 'Terminée',
+            new Date(c.start_date).toLocaleDateString('fr-FR'),
+            c.end_date ? new Date(c.end_date).toLocaleDateString('fr-FR') : 'N/A'
+        ];
+    });
+
+    const csvContent = "\uFEFF" + headers.join(";") + "\n" + rows.map(r => r.join(";")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `campagnes_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  // --- Filters Logic ---
+  const filteredCampaigns = campaigns.filter(c => {
+    const matchSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchPlatform = platformFilter === 'all' || c.platform === platformFilter;
+    return matchSearch && matchPlatform;
+  });
+
+  const stats = useMemo(() => {
+    const totalBudget = campaigns.reduce((sum, c) => sum + c.budget_spent, 0);
+    const totalOrders = campaigns.reduce((sum, c) => sum + c.orders_generated, 0);
+    const avgCAC = totalOrders > 0 ? totalBudget / totalOrders : 0;
+    return { totalBudget, totalOrders, avgCAC };
+  }, [campaigns]);
+
+  const getROASIndicator = (roas: number) => {
+    if (roas >= 2) return { color: 'text-green-600 bg-green-100', label: 'Excellent' };
+    if (roas >= 1) return { color: 'text-orange-600 bg-orange-100', label: 'Passable' };
+    return { color: 'text-red-600 bg-red-100', label: 'Non rentable' };
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div><h1 className="text-2xl font-bold text-gray-900">Campagnes Publicitaires</h1><p className="text-gray-500 text-sm">Analyse de rentabilité (ROAS & CAC)</p></div>
+        <button onClick={openAddModal} className="flex items-center gap-2 bg-[#1A5276] hover:bg-blue-900 text-white px-4 py-2.5 rounded-lg shadow-sm"><Plus size={18} /> Nouvelle Campagne</button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="p-3 bg-blue-100 rounded-lg text-blue-600"><DollarSign size={22} /></div><div><p className="text-xs text-gray-500">Budget Total</p><p className="text-xl font-bold text-gray-900">{formatMoney(stats.totalBudget)}</p></div></div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="p-3 bg-purple-100 rounded-lg text-purple-600"><Users size={22} /></div><div><p className="text-xs text-gray-500">Commandes Générées</p><p className="text-xl font-bold text-gray-900">{stats.totalOrders}</p></div></div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="p-3 bg-orange-100 rounded-lg text-orange-600"><Target size={22} /></div><div><p className="text-xs text-gray-500">CAC Moyen</p><p className="text-xl font-bold text-gray-900">{formatMoney(stats.avgCAC)}</p></div></div>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 flex items-start gap-2"><AlertCircle size={18} className="mt-0.5 flex-shrink-0" /><div><span className="font-bold">Calcul du ROAS :</span> Basé sur votre Panier Moyen de <span className="font-bold">{formatMoney(globalAOV)}</span>.</div></div>
+
+      {/* Filters & Export */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col md:flex-row gap-4 items-center">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input type="text" placeholder="Rechercher une campagne..." className="w-full pl-10 pr-4 py-2 border rounded-lg" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+        </div>
+        <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} className="border rounded-lg px-4 py-2 bg-white min-w-[150px]">
+          <option value="all">Toutes plateformes</option>
+          <option value="facebook">Facebook</option>
+          <option value="instagram">Instagram</option>
+          <option value="tiktok">TikTok</option>
+        </select>
+        <button onClick={exportToCSV} className="flex items-center gap-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg shadow-sm whitespace-nowrap">
+          <Download size={18} /> Exporter
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b text-gray-500 uppercase text-xs"><tr><th className="p-4 text-left">Campagne</th><th className="p-4 text-left">Statut</th><th className="p-4 text-left">Plateforme</th><th className="p-4 text-right">Budget</th><th className="p-4 text-right">Commandes</th><th className="p-4 text-right">CAC</th><th className="p-4 text-center">ROAS</th><th className="p-4 text-center">Actions</th></tr></thead>
+            <tbody className="divide-y">
+              {loading ? <tr><td colSpan={8} className="text-center p-10 text-gray-400">Chargement...</td></tr> : filteredCampaigns.length === 0 ? <tr><td colSpan={8} className="text-center p-10 text-gray-400">Aucune campagne</td></tr> : filteredCampaigns.map((camp) => {
+                const cac = camp.orders_generated > 0 ? camp.budget_spent / camp.orders_generated : 0;
+                const roas = camp.budget_spent > 0 ? (camp.orders_generated * globalAOV) / camp.budget_spent : 0;
+                const roasStatus = getROASIndicator(roas);
+                const isActive = !camp.end_date || new Date(camp.end_date) >= new Date();
+                return (
+                  <tr key={camp.id} className="hover:bg-gray-50">
+                    <td className="p-4"><div className="font-semibold text-gray-900">{camp.name}</div><div className="text-xs text-gray-400">Début: {new Date(camp.start_date).toLocaleDateString('fr-FR')}</div></td>
+                    <td className="p-4">
+                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                          {isActive ? <CheckCircle size={12}/> : <XCircle size={12}/>}
+                          {isActive ? 'Active' : 'Terminée'}
+                        </span>
+                    </td>
+                    <td className="p-4"><span className={`text-xs font-bold uppercase ${camp.platform === 'facebook' ? 'text-blue-600' : camp.platform === 'instagram' ? 'text-pink-600' : 'text-gray-600'}`}>{camp.platform}</span></td>
+                    <td className="p-4 text-right font-mono">{formatMoney(camp.budget_spent)}</td>
+                    <td className="p-4 text-right font-medium">{camp.orders_generated}</td>
+                    <td className="p-4 text-right font-mono text-gray-600">{formatMoney(cac)}</td>
+                    <td className="p-4 text-center"><div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-sm ${roasStatus.color}`}><TrendingUp size={14} />{roas.toFixed(2)}x</div></td>
+                    <td className="p-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => openEditModal(camp)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-blue-600" title="Modifier"><Edit2 size={16} /></button>
+                        <button onClick={() => handleDelete(camp.id)} className="p-2 hover:bg-red-50 rounded-full text-gray-500 hover:text-red-600" title="Supprimer"><Trash2 size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL AJOUT / MODIFICATION */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="p-6 border-b flex justify-between items-center"><h2 className="text-xl font-bold">{isEditing ? 'Modifier la campagne' : 'Nouvelle Campagne'}</h2><button onClick={() => setIsModalOpen(false)} className="text-gray-300 hover:text-gray-500"><X size={24} /></button></div>
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nom</label><input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full border rounded-lg p-2.5" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Plateforme</label><select value={formData.platform} onChange={(e) => setFormData({...formData, platform: e.target.value})} className="w-full border rounded-lg p-2.5 bg-white"><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option></select></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Budget (FCFA)</label><input type="number" required value={formData.budget_spent} onChange={(e) => setFormData({...formData, budget_spent: Number(e.target.value)})} className="w-full border rounded-lg p-2.5" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Commandes</label><input type="number" required value={formData.orders_generated} onChange={(e) => setFormData({...formData, orders_generated: Number(e.target.value)})} className="w-full border rounded-lg p-2.5" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Date début</label><input type="date" required value={formData.start_date} onChange={(e) => setFormData({...formData, start_date: e.target.value})} className="w-full border rounded-lg p-2.5" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Date fin (Optionnel)</label><input type="date" value={formData.end_date} onChange={(e) => setFormData({...formData, end_date: e.target.value})} className="w-full border rounded-lg p-2.5" /></div>
+              </div>
+              <div className="pt-4 flex justify-end gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button><button type="submit" className="px-6 py-2.5 bg-[#E67E22] text-white rounded-lg hover:bg-orange-600 shadow-sm font-medium">{isEditing ? 'Mettre à jour' : 'Sauvegarder'}</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
