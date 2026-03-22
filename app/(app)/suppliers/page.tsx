@@ -154,7 +154,7 @@ export default function SuppliersPage() {
       .order('created_at', { ascending: false });
 
     if (data) {
-      setHistoryData(data as Purchase[]);
+      setHistoryData(data as unknown as Purchase[]);
       const totalSpent = data.reduce((sum, p) => sum + (p.total_cost || 0), 0);
       const totalPaid = data.reduce((sum, p) => sum + (p.amount_paid || 0), 0);
       setHistorySupplierTotal(totalSpent);
