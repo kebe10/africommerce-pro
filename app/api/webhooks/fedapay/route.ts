@@ -1,20 +1,23 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-// Force ce fichier à être dynamique (évite les erreurs de build)
 export const dynamic = 'force-dynamic'
-
-// Initialisation Supabase Admin
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-
-const supabase = createClient(supabaseUrl, serviceKey)
 
 export async function POST(request: Request) {
   try {
+    // On initialise Supabase DANS la fonction, pas au début du fichier
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !serviceKey) {
+      return NextResponse.json({ error: 'Config manquante' }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, serviceKey)
+
     const body = await request.json()
     
-    // Vérification simple de l'événement
+    // Vérification de l'événement FedaPay
     if (body.event === 'payment.succeeded' || body.status === 'approved') {
       const paymentData = body.data || body
       const userId = paymentData.metadata?.user_id
@@ -36,6 +39,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true })
     
   } catch (error) {
-    return NextResponse.json({ error: 'Error' }, { status: 500 })
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }
