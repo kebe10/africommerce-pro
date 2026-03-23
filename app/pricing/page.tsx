@@ -16,7 +16,6 @@ export default function PricingPage() {
     setError('');
 
     try {
-      // 1. Récupérer l'utilisateur connecté
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
@@ -24,7 +23,6 @@ export default function PricingPage() {
         return;
       }
 
-      // 2. Demander à notre API de créer le lien de paiement
       const res = await fetch('/api/create-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -38,7 +36,7 @@ export default function PricingPage() {
       const data = await res.json();
 
       if (data.url) {
-        // 3. Rediriger l'utilisateur vers la page Moneroo
+        // Redirection vers FedaPay
         window.location.href = data.url;
       } else {
         setError(data.error || "Impossible de lancer le paiement.");
@@ -56,7 +54,7 @@ export default function PricingPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <h1 className="text-3xl font-bold text-gray-900">Votre période d'essai est terminée</h1>
-        <p className="mt-2 text-gray-600">Choisissez votre abonnement pour continuer.</p>
+        <p className="mt-2 text-gray-600">Passez au plan Pro pour continuer.</p>
       </div>
 
       <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-md">
@@ -64,7 +62,7 @@ export default function PricingPage() {
           <h2 className="text-xl font-bold text-center mb-6">Plan Pro - 6 500 FCFA / mois</h2>
           
           <ul className="space-y-3 mb-8 text-sm text-gray-600">
-            <li className="flex items-center gap-2"><CheckCircle size={14} className="text-green-500" /> Accès total à vie</li>
+            <li className="flex items-center gap-2"><CheckCircle size={14} className="text-green-500" /> Accès total</li>
             <li className="flex items-center gap-2"><CheckCircle size={14} className="text-green-500" /> Support prioritaire</li>
           </ul>
 
@@ -82,13 +80,13 @@ export default function PricingPage() {
             {loading ? (
               <>
                 <Loader2 className="animate-spin h-5 w-5" />
-                Connexion à Moneroo...
+                Connexion à FedaPay...
               </>
             ) : 'Payer avec Mobile Money / Carte'}
           </button>
           
           <p className="mt-4 text-center text-xs text-gray-400">
-            Paiement sécurisé par Moneroo
+            Paiement sécurisé par FedaPay
           </p>
         </div>
         
