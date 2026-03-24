@@ -39,7 +39,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ url: data.v1.url });
     } else {
       console.error('Erreur FedaPay:', data);
-      return NextResponse.json({ error: data.message || "Erreur API" }, { status: 400 });
+      // On renvoie TOUTE l'erreur pour comprendre
+      return NextResponse.json({ error: JSON.stringify(data) }, { status: 400 });
     }
 
   } catch (error) {
