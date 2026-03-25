@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
     // Configuration Claude
     const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY, // On changera le nom de la clé
+      apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
     const prompt = `
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
     // Appel à Claude
     const msg = await anthropic.messages.create({
-      model: "claude-3-haiku-20240307", // Modèle rapide et économique
+      model: "claude-3-5-sonnet-20240620", // CORRECTION ICI
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     });
@@ -60,7 +60,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Erreur Claude:', error);
-    // On renvoie l'erreur exacte pour comprendre
     return NextResponse.json({ error: error.message || "Erreur IA" }, { status: 500 });
   }
 }
