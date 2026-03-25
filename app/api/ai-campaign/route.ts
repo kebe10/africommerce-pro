@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -8,9 +8,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { productName, productDescription, budget, country } = body;
 
-    // Configuration OpenAI (Clé à ajouter sur Vercel plus tard)
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+    // Configuration Claude
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY, // On changera le nom de la clé
     });
 
     const prompt = `
@@ -21,40 +21,46 @@ export async function POST(request: Request) {
       Description : ${productDescription}
       Budget total : ${budget} FCFA
       
-      Réponds UNIQUEMENT en format JSON strict avec cette structure :
+      Réponds UNIQUEMENT en format JSON strict (sans texte avant ni après) avec cette structure :
       {
         "target_audience": {
           "age_range": "ex: 25-45",
           "interests": ["ex: Mode", "ex: Beauté"],
           "locations": ["Ville1", "Ville2"],
-          "behaviors": ["ex: Acheteurs en ligne", "ex: Utilisateurs Instagram"]
+          "behaviors": ["ex: Acheteurs en ligne"]
         },
         "ad_creative": {
-          "hook": "Phrase d'accroche percutante (max 10 mots)",
-          "body": "Corps du texte persuasif (max 30 mots) en incluant des emojis",
-          "call_to_action": "ex: Acheter maintenant",
-          "visual_idea": "Description détaillée de l'image ou vidéo à créer"
+          "hook": "Phrase d'accroche",
+          "body": "Corps du texte avec emojis",
+          "call_to_action": "Bouton",
+          "visual_idea": "Description visuelle"
         },
         "budget_split": {
-          "testing": "Pourcentage pour le test",
-          "scaling": "Pourcentage pour scaler"
+          "testing": "20%",
+          "scaling": "80%"
         },
-        "tips": ["Conseil 1 spécifique au marché africain", "Conseil 2"]
+        "tips": ["Conseil 1", "Conseil 2"]
       }
     `;
 
-    const completion = await openai.chat.completions.create({
-      messages: [{ role: 'user', content: prompt }],
-      model: 'gpt-3.5-turbo', // Ou gpt-4o si tu as accès
-      response_format: { type: "json_object" },
+    // Appel à Claude
+    const msg = await anthropic.messages.create({
+      model: "claude-3-haiku-20240307", // Modèle rapide et économique
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const result = JSON.parse(completion.choices[0].message.content || '{}');
+    // Extraction du texte
+    const responseText = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
+    
+    // Parsing du JSON
+    const result = JSON.parse(responseText);
     
     return NextResponse.json(result);
 
   } catch (error: any) {
-    console.error('Erreur IA:', error);
-    return NextResponse.json({ error: "Erreur de génération IA. Vérifiez la clé API." }, { status: 500 });
+    console.error('Erreur Claude:', error);
+    // On renvoie l'erreur exacte pour comprendre
+    return NextResponse.json({ error: error.message || "Erreur IA" }, { status: 500 });
   }
 }
