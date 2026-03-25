@@ -7,15 +7,12 @@ export async function POST(request: Request) {
 
     let secretKey = process.env.FEDAPAY_SECRET_KEY || '';
     secretKey = secretKey.trim(); 
-    // DEBUG : On affiche le début de la clé pour être sûr
-    console.log("--- DEBUG ---");
-    console.log("Début de la clé:", secretKey.substring(0, 15));
-    console.log("Taille:", secretKey.length);
+
     if (!secretKey) {
       return NextResponse.json({ error: 'Clé API manquante' }, { status: 500 });
     }
 
-    // APPEL FEDAPAY
+    // APPEL FEDAAPY
     const response = await fetch('https://api.fedapay.com/v1/transactions', {
       method: 'POST',
       headers: {
@@ -32,7 +29,7 @@ export async function POST(request: Request) {
           lastname: 'User'
         },
         metadata: { user_id: userId },
-        return_url: 'https://africommerce-pro.vercel.app/dashboard' // Mets ton URL Vercel ici
+        return_url: 'https://africommerce-pro.vercel.app/dashboard'
       })
     });
 
@@ -41,9 +38,8 @@ export async function POST(request: Request) {
     if (data.v1 && data.v1.url) {
       return NextResponse.json({ url: data.v1.url });
     } else {
-      console.error('Erreur FedaPay:', data);
-      // On renvoie TOUTE l'erreur pour comprendre
-      return NextResponse.json({ error: JSON.stringify(data) }, { status: 400 });
+      // DEBUG : On affiche l'erreur ET le début de la clé
+      return NextResponse.json({ error: `${data.message} (Clé: ${secretKey.substring(0, 5)})` }, { status: 400 });
     }
 
   } catch (error) {
