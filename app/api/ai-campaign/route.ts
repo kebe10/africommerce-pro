@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -7,41 +8,50 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { productName, productDescription, budget, country } = body;
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-
-    if (!apiKey) return NextResponse.json({ error: "Clé Anthropic manquante" }, { status: 500 });
-
-    // Requete directe HTTP (sans SDK) pour débugger
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true" // Parfois nécessaire
-      },
-      body: JSON.stringify({
-        model: "claude-3-haiku-20240307",
-        max_tokens: 1024,
-        messages: [
-          {
-            role: "user",
-            content: `Tu es un expert marketing pour ${country}. Crée une campagne pour ${productName} (${productDescription}) budget ${budget}. Réponds en JSON strict avec les clés: target_audience, ad_creative, budget_split, tips.`
-          }
-        ]
-      })
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
-    const data = await response.json();
+    const prompt = `
+      Tu es un expert en marketing digital spécialisé pour le marché africain (${country}).
+      
+      Génère un plan de campagne publicitaire Facebook/Instagram complet pour ce produit :
+      Produit : ${productName}
+      Description : ${productDescription}
+      Budget total : ${budget} FCFA
+      
+      Réponds UNIQUEMENT en format JSON strict avec cette structure :
+      {
+        "target_audience": {
+          "age_range": "ex: 25-45",
+          "interests": ["ex: Mode"],
+          "locations": ["Ville1"],
+          "behaviors": ["ex: Acheteurs en ligne"]
+        },
+        "ad_creative": {
+          "hook": "Phrase d'accroche",
+          "body": "Corps du texte",
+          "call_to_action": "Bouton",
+          "visual_idea": "Description visuelle"
+        },
+        "budget_split": { "testing": "20%", "scaling": "80%" },
+        "tips": ["Conseil 1"]
+      }
+    `;
 
-    if (!response.ok) {
-      // On renvoie l'erreur exacte reçue
-      return NextResponse.json({ error: `Anthropic Error: ${JSON.stringify(data)}` }, { status: 500 });
-    }
+    // NOUVEAU MODELE (comme demandé)
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
 
-    return NextResponse.json(data.content[0].text);
+    const responseText = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
+    const result = JSON.parse(responseText);
+    
+    return NextResponse.json(result);
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Erreur IA" }, { status: 500 });
   }
 }
