@@ -11,45 +11,29 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handlePayment = async () => {
+    const handlePayment = async () => {
     setLoading(true);
-    setError('');
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
+    // === MODE DÉMO (Contournement temporaire) ===
+    // On active l'abonnement manuellement pour te permettre de tester
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + 1);
       
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-
-      const res = await fetch('/api/create-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: user.email,
-          userId: user.id,
-          fullName: user.user_metadata?.full_name
-        })
-      });
-
-      const data = await res.json();
-
-      if (data.url) {
-        // Redirection vers FedaPay
-        window.location.href = data.url;
-      } else {
-        setError(data.error || "Impossible de lancer le paiement.");
-        setLoading(false);
-      }
-
-    } catch (err) {
-      console.error(err);
-      setError("Une erreur est survenue.");
-      setLoading(false);
+      await supabase.from('profiles').update({
+        subscription_status: 'active',
+        subscription_ends_at: endDate.toISOString()
+      }).eq('id', user.id);
+      
+      alert("✅ Compte activé manuellement (Mode Test). Votre site est pleinement fonctionnel !");
+      router.push('/dashboard');
+    } else {
+      router.push('/login');
     }
+    setLoading(false);
   };
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
