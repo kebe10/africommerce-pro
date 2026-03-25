@@ -8,7 +8,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { productName, productDescription, budget, country } = body;
 
-    // Configuration Claude
     const anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
@@ -21,39 +20,33 @@ export async function POST(request: Request) {
       Description : ${productDescription}
       Budget total : ${budget} FCFA
       
-      Réponds UNIQUEMENT en format JSON strict (sans texte avant ni après) avec cette structure :
+      Réponds UNIQUEMENT en format JSON strict avec cette structure :
       {
         "target_audience": {
           "age_range": "ex: 25-45",
-          "interests": ["ex: Mode", "ex: Beauté"],
-          "locations": ["Ville1", "Ville2"],
+          "interests": ["ex: Mode"],
+          "locations": ["Ville1"],
           "behaviors": ["ex: Acheteurs en ligne"]
         },
         "ad_creative": {
           "hook": "Phrase d'accroche",
-          "body": "Corps du texte avec emojis",
+          "body": "Corps du texte",
           "call_to_action": "Bouton",
           "visual_idea": "Description visuelle"
         },
-        "budget_split": {
-          "testing": "20%",
-          "scaling": "80%"
-        },
-        "tips": ["Conseil 1", "Conseil 2"]
+        "budget_split": { "testing": "20%", "scaling": "80%" },
+        "tips": ["Conseil 1"]
       }
     `;
 
-    // Appel à Claude
+    // ESSAI AVEC CLAUDE 3 SONNET (Modèle très stable)
     const msg = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20240620", // CORRECTION ICI
+      model: "claude-3-sonnet-20240229",
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     });
 
-    // Extraction du texte
     const responseText = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
-    
-    // Parsing du JSON
     const result = JSON.parse(responseText);
     
     return NextResponse.json(result);
