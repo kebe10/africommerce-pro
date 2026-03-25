@@ -170,16 +170,7 @@ export default function CampaignsPage() {
         </div>
       </div>
 
-      {/* KPIs & Tableaux ... (garde ton ancien code pour les KPIs et le tableau) */}
-       {/* Pour la concision, je ne remets pas tout le code du tableau ici, mais il reste identique */}
-       {/* Assure-toi de laisser tes blocs KPI et Tableau existants ici */}
-       {/* JE RAJOUTE JUSTE LE MODAL IA EN BAS */}
-       
-       {/* ... TON CODE EXISTANT POUR LES KPI ET TABLEAU ICI ... */}
-       
-       {/* Pour que ça fonctionne, je vais remettre la structure complète mais tu peux juste copier les modals si tu veux */}
-       
-       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="p-3 bg-blue-100 rounded-lg text-blue-600"><DollarSign size={22} /></div><div><p className="text-xs text-gray-500">Budget Total</p><p className="text-xl font-bold text-gray-900">{formatMoney(stats.totalBudget)}</p></div></div>
         <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="p-3 bg-purple-100 rounded-lg text-purple-600"><Users size={22} /></div><div><p className="text-xs text-gray-500">Commandes Générées</p><p className="text-xl font-bold text-gray-900">{stats.totalOrders}</p></div></div>
         <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="p-3 bg-orange-100 rounded-lg text-orange-600"><Target size={22} /></div><div><p className="text-xs text-gray-500">CAC Moyen</p><p className="text-xl font-bold text-gray-900">{formatMoney(stats.avgCAC)}</p></div></div>
@@ -204,9 +195,8 @@ export default function CampaignsPage() {
         </button>
       </div>
 
-      {/* TABLEAU DES CAMPAGNES (Garde ton ancien tableau ici si tu veux pas tout copier) */}
-      {/* Pour simplifier, je remets tout le fichier pour que ce soit copier-coller direct */}
-       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+      {/* TABLEAU DES CAMPAGNES */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b text-gray-500 uppercase text-xs"><tr><th className="p-4 text-left">Campagne</th><th className="p-4 text-left">Statut</th><th className="p-4 text-left">Plateforme</th><th className="p-4 text-right">Budget</th><th className="p-4 text-right">Commandes</th><th className="p-4 text-right">CAC</th><th className="p-4 text-center">ROAS</th><th className="p-4 text-center">Actions</th></tr></thead>
@@ -244,19 +234,24 @@ export default function CampaignsPage() {
         </div>
       </div>
 
-
-      {/* MODAL NORMAL (AJOUT/MODIF) */}
+      {/* MODAL NORMAL (AJOUT/MODIF) - CECI AVAIT DISPARU */}
       {isModalOpen && (
-         // Garde ton code de modal existant ici
-         // Je le mets pas pour alléger, mais ne l'efface pas !
-         // ... TON ANCIEN MODAL ICI ...
-         null 
-         // SI TU VEUX LE CODE COMPLET DIS LE MOI, MAIS JE VEUX PAS SURCHARGER LE MESSAGE
-         // Je mets juste le nouveau modal IA ci-dessous
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="p-6 border-b flex justify-between items-center"><h2 className="text-xl font-bold">{isEditing ? 'Modifier' : 'Nouvelle Campagne'}</h2><button onClick={() => setIsModalOpen(false)} className="text-gray-300 hover:text-gray-500"><X size={24} /></button></div>
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nom</label><input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full border rounded-lg p-2.5" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Plateforme</label><select value={formData.platform} onChange={(e) => setFormData({...formData, platform: e.target.value})} className="w-full border rounded-lg p-2.5 bg-white"><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option></select></div>
+              <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Budget (FCFA)</label><input type="number" required value={formData.budget_spent} onChange={(e) => setFormData({...formData, budget_spent: Number(e.target.value)})} className="w-full border rounded-lg p-2.5" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Commandes</label><input type="number" required value={formData.orders_generated} onChange={(e) => setFormData({...formData, orders_generated: Number(e.target.value)})} className="w-full border rounded-lg p-2.5" /></div></div>
+              <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Date début</label><input type="date" required value={formData.start_date} onChange={(e) => setFormData({...formData, start_date: e.target.value})} className="w-full border rounded-lg p-2.5" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Date fin (Optionnel)</label><input type="date" value={formData.end_date} onChange={(e) => setFormData({...formData, end_date: e.target.value})} className="w-full border rounded-lg p-2.5" /></div></div>
+              <div className="pt-4 flex justify-end gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button><button type="submit" className="px-6 py-2.5 bg-[#E67E22] text-white rounded-lg hover:bg-orange-600 shadow-sm font-medium">{isEditing ? 'Mettre à jour' : 'Sauvegarder'}</button></div>
+            </form>
+          </div>
+        </div>
       )}
 
-       {/* NOUVEAU MODAL IA */}
-       {isAIModalOpen && (
+      {/* MODAL IA */}
+      {isAIModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b sticky top-0 bg-white flex justify-between items-center">
