@@ -7,7 +7,10 @@ export async function POST(request: Request) {
 
     let secretKey = process.env.FEDAPAY_SECRET_KEY || '';
     secretKey = secretKey.trim(); 
-
+    // DEBUG : On affiche le début de la clé pour être sûr
+    console.log("--- DEBUG ---");
+    console.log("Début de la clé:", secretKey.substring(0, 15));
+    console.log("Taille:", secretKey.length);
     if (!secretKey) {
       return NextResponse.json({ error: 'Clé API manquante' }, { status: 500 });
     }
