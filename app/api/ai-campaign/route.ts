@@ -39,19 +39,26 @@ export async function POST(request: Request) {
       }
     `;
 
-    // NOUVEAU MODELE (comme demandé)
+    // NOUVEAU MODELE
     const msg = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     });
 
-    const responseText = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
+    // Extraction du texte
+    let responseText = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
+    
+    // NETTOYAGE : On enlève les balises Markdown ```json et ```
+    responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    // Parsing du JSON
     const result = JSON.parse(responseText);
     
     return NextResponse.json(result);
 
   } catch (error: any) {
+    console.error('Erreur Claude:', error);
     return NextResponse.json({ error: error.message || "Erreur IA" }, { status: 500 });
   }
 }
