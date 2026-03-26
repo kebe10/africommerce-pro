@@ -78,14 +78,23 @@ export default function CampaignsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+    const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Sécurité : On récupère l'utilisateur
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("Vous devez être connecté");
+
     let error;
     if (isEditing && editingId) {
       const result = await supabase.from('ad_campaigns').update(formData).eq('id', editingId);
       error = result.error;
     } else {
-      const result = await supabase.from('ad_campaigns').insert([formData]);
+      // On ajoute user_id lors de la création
+      const result = await supabase.from('ad_campaigns').insert([{
+          ...formData,
+          user_id: user.id // LIAISON CRITIQUE
+      }]);
       error = result.error;
     }
 

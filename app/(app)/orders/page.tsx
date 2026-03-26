@@ -67,9 +67,13 @@ export default function OrdersPage() {
   }
 
   // --- Actions ---
-  const handleCreateOrder = async (e: React.FormEvent) => {
+    const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Sécurité : On récupère l'utilisateur
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("Vous devez être connecté");
+
     const product = products.find(p => p.id === newOrder.product_id);
     if (!product) return alert("Produit introuvable");
     
@@ -79,6 +83,7 @@ export default function OrdersPage() {
       ...newOrder,
       unit_price: product.selling_price,
       total_amount: total,
+      user_id: user.id // LIAISON CRITIQUE
     });
 
     if (error) {
@@ -89,7 +94,6 @@ export default function OrdersPage() {
       fetchOrders();
     }
   };
-
   const updateStatus = async (orderId: string, newStatus: string) => {
     const { error } = await supabase
       .from('orders')
