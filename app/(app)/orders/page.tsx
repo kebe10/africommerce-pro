@@ -92,10 +92,15 @@ export default function OrdersPage() {
   };
 
   // --- Mise à jour Statut ---
-  const updateOrderStatus = async (id: string, status: string) => {
+    const updateOrderStatus = async (id: string, status: string) => {
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
-    if (!error) fetchOrders();
-    else alert("Erreur mise à jour");
+    
+    if (error) {
+      console.error("Erreur Supabase:", error);
+      alert("Erreur mise à jour: " + error.message);
+    } else {
+      fetchOrders();
+    }
   };
 
   // --- Filtres ---
