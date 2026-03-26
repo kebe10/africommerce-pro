@@ -72,14 +72,24 @@ export default function ProductsPage() {
     setIsModalOpen(true);
   };
 
+  // --- FONCTION MODIFIÉE AVEC user_id ---
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // On récupère l'utilisateur connecté
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("Vous devez être connecté");
+
     let error;
     if (isEditing && editingId) {
       const result = await supabase.from('products').update(formData).eq('id', editingId);
       error = result.error;
     } else {
-      const result = await supabase.from('products').insert([formData]);
+      // On ajoute user_id lors de la création
+      const result = await supabase.from('products').insert([{
+          ...formData,
+          user_id: user.id // LIAISON CRITIQUE
+      }]);
       error = result.error;
     }
     
