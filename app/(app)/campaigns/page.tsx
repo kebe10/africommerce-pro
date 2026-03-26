@@ -234,7 +234,7 @@ export default function CampaignsPage() {
         </div>
       </div>
 
-      {/* MODAL NORMAL (AJOUT/MODIF) - CECI AVAIT DISPARU */}
+      {/* MODAL NORMAL (AJOUT/MODIF) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
@@ -299,49 +299,77 @@ export default function CampaignsPage() {
                {/* Résultat IA */}
                {aiResult && (
                   <div className="mt-6 space-y-6 border-t pt-6">
-                     <h3 className="font-bold text-lg">🚀 Plan Généré par l'IA</h3>
+                     <h3 className="font-bold text-lg">🚀 Plan de Campagne Généré</h3>
                      
                      {/* Ciblage */}
                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold mb-2 flex items-center gap-2"><Users size={16}/> Cible Audience</h4>
-                        <div className="grid md:grid-cols-3 gap-4 text-sm">
-                           <div><span className="text-gray-500 block">Âge:</span> <span className="font-medium">{aiResult.target_audience?.age_range}</span></div>
-                           <div><span className="text-gray-500 block">Intérêts:</span> <span className="font-medium">{aiResult.target_audience?.interests?.join(', ')}</span></div>
-                           <div><span className="text-gray-500 block">Villes:</span> <span className="font-medium">{aiResult.target_audience?.locations?.join(', ')}</span></div>
+                        <h4 className="font-semibold mb-2 flex items-center gap-2"><Users size={16}/> 🎯 Ciblage Détaillé</h4>
+                        <div className="grid md:grid-cols-2 gap-4 text-sm">
+                           <div>
+                              <span className="text-gray-500 block">Âge :</span> 
+                              <span className="font-medium">{aiResult.targeting?.age_min} - {aiResult.targeting?.age_max} ans</span>
+                           </div>
+                           <div>
+                              <span className="text-gray-500 block">Genre :</span> 
+                              <span className="font-medium">{aiResult.targeting?.gender}</span>
+                           </div>
+                           <div>
+                              <span className="text-gray-500 block">Localisation :</span> 
+                              <span className="font-medium">{aiResult.targeting?.locations?.join(', ')}</span>
+                           </div>
+                           <div>
+                              <span className="text-gray-500 block">Intérêts :</span> 
+                              <span className="font-medium">{aiResult.targeting?.interests?.join(', ')}</span>
+                           </div>
+                           <div className="md:col-span-2">
+                              <span className="text-gray-500 block">Comportements :</span> 
+                              <span className="font-medium text-blue-700">{aiResult.targeting?.behaviors?.join(', ')}</span>
+                           </div>
                         </div>
                      </div>
 
-                     {/* Texte Pub */}
+                     {/* Création Publicitaire (Style Facebook) */}
                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <h4 className="font-semibold mb-2 text-blue-800">📝 Texte de la Publicité</h4>
-                        <div className="space-y-2 text-sm">
-                           <p><strong className="text-blue-700">Accroche:</strong> {aiResult.ad_creative?.hook}</p>
-                           <p><strong className="text-blue-700">Corps:</strong> {aiResult.ad_creative?.body}</p>
-                           <p><strong className="text-blue-700">Action:</strong> {aiResult.ad_creative?.call_to_action}</p>
+                        <h4 className="font-semibold mb-3 text-blue-800">📝 Contenu de la Publicité (Prêt à copier)</h4>
+                        <div className="space-y-3 text-sm">
+                           <div className="bg-white p-2 rounded border">
+                              <span className="text-xs text-gray-400 block mb-1">Texte Principal (Body) :</span>
+                              <p className="font-medium">{aiResult.ad_creative?.primary_text}</p>
+                           </div>
+                           <div className="grid grid-cols-2 gap-2">
+                              <div className="bg-white p-2 rounded border">
+                                 <span className="text-xs text-gray-400 block mb-1">Titre (Headline) :</span>
+                                 <p className="font-bold">{aiResult.ad_creative?.headline}</p>
+                              </div>
+                              <div className="bg-white p-2 rounded border">
+                                 <span className="text-xs text-gray-400 block mb-1">Description :</span>
+                                 <p>{aiResult.ad_creative?.description}</p>
+                              </div>
+                           </div>
+                           <div className="flex gap-2">
+                              <span className="bg-white px-3 py-1 rounded-full border text-xs font-bold text-green-700">{aiResult.ad_creative?.call_to_action}</span>
+                           </div>
                         </div>
                      </div>
 
                      {/* Visuel */}
                      <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
                         <h4 className="font-semibold mb-2 text-orange-800">🎨 Idée Visuelle</h4>
-                        <p className="text-sm">{aiResult.ad_creative?.visual_idea}</p>
+                        <p className="text-sm">{aiResult.ad_creative?.visual_description}</p>
                      </div>
 
-                     {/* Budget Split */}
-                     <div className="flex gap-4">
-                        <div className="flex-1 bg-green-50 p-3 rounded-lg text-center">
-                           <span className="block text-xs text-gray-500">Testing</span>
-                           <span className="font-bold text-lg text-green-700">{aiResult.budget_split?.testing}</span>
-                        </div>
-                        <div className="flex-1 bg-blue-50 p-3 rounded-lg text-center">
-                           <span className="block text-xs text-gray-500">Scaling</span>
-                           <span className="font-bold text-lg text-blue-700">{aiResult.budget_split?.scaling}</span>
+                     {/* Setup */}
+                     <div className="bg-green-50 p-4 rounded-lg border">
+                        <h4 className="font-semibold mb-2 text-green-800">⚙️ Configuration Campagne</h4>
+                        <div className="text-sm">
+                           <p><strong>Objectif :</strong> {aiResult.campaign_setup?.objective}</p>
+                           <p><strong>Stratégie Budget :</strong> {aiResult.campaign_setup?.budget_split?.testing_phase} / {aiResult.campaign_setup?.budget_split?.scaling_phase}</p>
                         </div>
                      </div>
 
                      <div className="flex gap-2">
-                      <button onClick={() => navigator.clipboard.writeText(JSON.stringify(aiResult, null, 2))} className="flex-1 py-2 border rounded-lg text-sm hover:bg-gray-50">Copier tout</button>
-                      <button onClick={() => setIsAIModalOpen(false)} className="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">Fermer et Appliquer</button>
+                      <button onClick={() => navigator.clipboard.writeText(JSON.stringify(aiResult, null, 2))} className="flex-1 py-2 border rounded-lg text-sm hover:bg-gray-50">Copier le JSON</button>
+                      <button onClick={() => setIsAIModalOpen(false)} className="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">Fermer</button>
                    </div>
                   </div>
                )}
