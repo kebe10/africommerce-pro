@@ -38,11 +38,12 @@ export default function SuppliersPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // CORRECTION 1 : Ajout du state manquant
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // KPIs
-  const [totalSpending, setTotalSpending] = useState(0); // Total Investissement
-  const [totalDebt, setTotalDebt] = useState(0); // Total Dettes
+  const [totalSpending, setTotalSpending] = useState(0);
+  const [totalDebt, setTotalDebt] = useState(0);
 
   // Pour le modal de commande
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
@@ -77,18 +78,16 @@ export default function SuppliersPage() {
   async function fetchSuppliers() {
     setLoading(true);
     
-    // 1. Fournisseurs
     const { data: suppData } = await supabase.from('suppliers').select('*').order('name');
     if (suppData) setSuppliers(suppData);
 
-    // 2. Calculs Financiers
     const { data: purchases } = await supabase.from('purchases').select('total_cost, amount_paid');
     if (purchases) {
       const totalSpent = purchases.reduce((sum, p) => sum + (p.total_cost || 0), 0);
       const totalPaid = purchases.reduce((sum, p) => sum + (p.amount_paid || 0), 0);
       
-      setTotalSpending(totalSpent); // Investissement Total
-      setTotalDebt(totalSpent - totalPaid); // Dette Totale
+      setTotalSpending(totalSpent);
+      setTotalDebt(totalSpent - totalPaid);
     }
 
     setLoading(false);
@@ -104,15 +103,17 @@ export default function SuppliersPage() {
         email: supplier.email || '',
         address: supplier.address || ''
       });
+      setIsEditing(true);
       setEditingId(supplier.id);
     } else {
       setFormData(emptyForm);
+      setIsEditing(false);
       setEditingId(null);
     }
     setIsModalOpen(true);
   };
 
-    const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return alert("Le nom est obligatoire");
 
@@ -125,10 +126,9 @@ export default function SuppliersPage() {
       const result = await supabase.from('suppliers').update(formData).eq('id', editingId);
       error = result.error;
     } else {
-      // On ajoute user_id lors de la création
       const result = await supabase.from('suppliers').insert([{
           ...formData,
-          user_id: user.id // LIAISON CRITIQUE
+          user_id: user.id
       }]);
       error = result.error;
     }
@@ -171,7 +171,6 @@ export default function SuppliersPage() {
     setHistoryLoading(false);
   };
 
-  // Fonction pour payer une dette
   const handlePayDebt = async (purchaseId: string, currentPaid: number, totalCost: number) => {
     const remaining = totalCost - currentPaid;
     const amountToAddStr = prompt(`Montant restant : ${formatMoney(remaining)}\n\nEntrez le montant à payer maintenant :`);
@@ -190,9 +189,8 @@ export default function SuppliersPage() {
     if (error) {
       alert("Erreur lors du paiement");
     } else {
-      // Rafraîchir les données
       if (selectedSupplier) openHistoryModal(selectedSupplier);
-      fetchSuppliers(); // Pour mettre à jour les KPIs globaux
+      fetchSuppliers();
     }
   };
 
@@ -207,6 +205,10 @@ export default function SuppliersPage() {
     e.preventDefault();
     if (!selectedSupplier || !purchaseForm.product_id) return alert("Remplissez tous les champs");
 
+    // CORRECTION 2 : Sécurité pour les achats
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("Non connecté");
+
     const totalCost = purchaseForm.quantity * purchaseForm.unit_cost;
 
     const { error: purchaseError } = await supabase.from('purchases').insert({
@@ -216,7 +218,8 @@ export default function SuppliersPage() {
       unit_cost: purchaseForm.unit_cost,
       total_cost: totalCost,
       amount_paid: purchaseForm.amount_paid,
-      status: 'delivered'
+      status: 'delivered',
+      user_id: user.id // LIAISON CRITIQUE
     });
 
     if (purchaseError) {
@@ -224,7 +227,6 @@ export default function SuppliersPage() {
       return;
     }
 
-    // Mise à jour du stock
     const product = products.find(p => p.id === purchaseForm.product_id);
     if (product) {
       const newStock = product.stock_quantity + purchaseForm.quantity;
@@ -271,9 +273,8 @@ export default function SuppliersPage() {
         </div>
       </div>
 
-      {/* KPIs : Investissement & Dettes */}
+      {/* KPIs */}
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Carte Investissement */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 flex items-center justify-between shadow-sm">
           <div>
             <p className="text-sm text-blue-600 font-medium uppercase">Total des Achats</p>
@@ -284,7 +285,6 @@ export default function SuppliersPage() {
           </div>
         </div>
 
-        {/* Carte Dettes */}
         <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-xl p-6 flex items-center justify-between shadow-sm">
           <div>
             <p className="text-sm text-red-600 font-medium uppercase">Dettes Fournisseurs (Reste à payer)</p>
@@ -325,9 +325,7 @@ export default function SuppliersPage() {
                 )}
               </div>
               
-              {/* Actions */}
               <div className="space-y-2 pt-4 border-t">
-                
                 <div className="flex gap-2">
                    <button 
                     onClick={() => openHistoryModal(supplier)}
@@ -335,7 +333,6 @@ export default function SuppliersPage() {
                   >
                     <Eye size={14} /> Historique
                   </button>
-
                    <a 
                     href={getWhatsAppLink(supplier.phone, `Bonjour ${supplier.name}, je souhaite passer une commande.`)}
                     target="_blank"
@@ -345,7 +342,6 @@ export default function SuppliersPage() {
                     <MessageCircle size={14} /> WhatsApp
                   </a>
                 </div>
-
                 <button 
                   onClick={() => openPurchaseModal(supplier)}
                   className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 text-sm font-medium"
@@ -363,7 +359,7 @@ export default function SuppliersPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-6 border-b flex justify-between items-center">
-              <h2 className="text-lg font-bold">{editingId ? 'Modifier' : 'Nouveau Fournisseur'}</h2>
+              <h2 className="text-lg font-bold">{isEditing ? 'Modifier' : 'Nouveau Fournisseur'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-300 hover:text-gray-500"><X size={20} /></button>
             </div>
             <form onSubmit={handleSave} className="p-6 space-y-4">
@@ -411,7 +407,6 @@ export default function SuppliersPage() {
             </div>
 
             <div className="p-6">
-              {/* Totaux Fournisseur */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                  <div className="bg-blue-50 p-4 rounded-lg">
                     <span className="text-xs text-blue-600 font-medium">Total Dépensé</span>
@@ -465,7 +460,7 @@ export default function SuppliersPage() {
                               >
                                 Payer
                               </button>
-                            )}
+            )}
                           </td>
                         </tr>
                       );
@@ -536,7 +531,6 @@ export default function SuppliersPage() {
                 </div>
               </div>
 
-              {/* Section Paiement / Dette */}
               <div className="bg-gray-50 p-3 rounded-lg border space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Total Achat :</span>
