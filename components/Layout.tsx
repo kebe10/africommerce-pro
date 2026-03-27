@@ -10,13 +10,13 @@ import {
   ShoppingBag, 
   Users, 
   Truck, 
-  Calculator, 
+  DollarSign, 
   Megaphone, 
+  Calculator, 
   Settings, 
   LogOut, 
   Menu, 
   X, 
-  DollarSign,
   Sparkles
 } from 'lucide-react';
 
@@ -28,7 +28,8 @@ const navItems = [
   { name: 'Livraisons', href: '/deliveries', icon: Truck },
   { name: 'Fournisseurs', href: '/suppliers', icon: DollarSign },
   { name: 'Campagnes', href: '/campaigns', icon: Megaphone },
-  { name: 'Calculateur', href: '/calculator', icon: Calculator, highlight: true },
+  { name: 'Calculateur', href: '/calculator', icon: Calculator },
+  { name: 'Paramètres', href: '/settings', icon: Settings }, // REMIS ICI
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -94,7 +95,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     pathname === item.href
                       ? 'bg-[#1A5276] text-white'
                       : 'text-gray-700 hover:bg-gray-100'
-                  } ${item.highlight ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 hover:text-green-800' : ''}`}
+                  }`}
                 >
                   <item.icon size={20} />
                   {item.name}
@@ -132,14 +133,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   pathname === item.href
                     ? 'bg-[#1A5276] text-white'
                     : 'text-gray-700 hover:bg-gray-100'
-                } ${item.highlight ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 hover:text-green-800' : ''}`}
+                }`}
               >
                 <item.icon size={20} />
                 {item.name}
               </Link>
             ))}
             
-            {/* IA Button Sidebar */}
+            {/* BOUTON IA AJOUTÉ ICI POUR ORDINATEUR */}
             <div className="pt-4">
               <Link
                 href="/campaigns"
