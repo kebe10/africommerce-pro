@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { formatMoney, getWhatsAppLink } from '@/lib/utils';
-import { Plus, X, Phone, Mail, MapPin, Edit2, Trash2, Package, Search, User, DollarSign, Eye, MessageCircle, CreditCard, CheckCircle } from 'lucide-react';
+import { Plus, X, Phone, Edit2, Trash2, Package, Search, User, DollarSign, Eye, MessageCircle, CreditCard, CheckCircle, CalendarDays, History } from 'lucide-react';
 
 type Supplier = {
   id: string;
@@ -38,14 +38,15 @@ export default function SuppliersPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // CORRECTION 1 : Ajout du state manquant
+  const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // KPIs
-  const [totalSpending, setTotalSpending] = useState(0);
+  const [totalSpendingMonth, setTotalSpendingMonth] = useState(0); // NOUVEAU
+  const [totalSpendingAllTime, setTotalSpendingAllTime] = useState(0); // RENOMMÉ
   const [totalDebt, setTotalDebt] = useState(0);
 
-  // Pour le modal de commande
+  // Modals
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [purchaseForm, setPurchaseForm] = useState({
@@ -55,7 +56,6 @@ export default function SuppliersPage() {
     amount_paid: 0
   });
 
-  // Pour le modal d'historique
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyData, setHistoryData] = useState<Purchase[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -81,13 +81,25 @@ export default function SuppliersPage() {
     const { data: suppData } = await supabase.from('suppliers').select('*').order('name');
     if (suppData) setSuppliers(suppData);
 
-    const { data: purchases } = await supabase.from('purchases').select('total_cost, amount_paid');
+    // Calculs Financiers
+    const { data: purchases } = await supabase.from('purchases').select('total_cost, amount_paid, created_at');
+    
     if (purchases) {
+      // 1. Total Historique
       const totalSpent = purchases.reduce((sum, p) => sum + (p.total_cost || 0), 0);
       const totalPaid = purchases.reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-      
-      setTotalSpending(totalSpent);
+      setTotalSpendingAllTime(totalSpent);
       setTotalDebt(totalSpent - totalPaid);
+
+      // 2. Total du Mois
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const monthlySpent = purchases
+        .filter(p => new Date(p.created_at) >= startOfMonth)
+        .reduce((sum, p) => sum + (p.total_cost || 0), 0);
+      
+      setTotalSpendingMonth(monthlySpent);
     }
 
     setLoading(false);
@@ -117,7 +129,6 @@ export default function SuppliersPage() {
     e.preventDefault();
     if (!formData.name) return alert("Le nom est obligatoire");
 
-    // Sécurité : On récupère l'utilisateur
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return alert("Vous devez être connecté");
 
@@ -205,7 +216,6 @@ export default function SuppliersPage() {
     e.preventDefault();
     if (!selectedSupplier || !purchaseForm.product_id) return alert("Remplissez tous les champs");
 
-    // CORRECTION 2 : Sécurité pour les achats
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return alert("Non connecté");
 
@@ -219,7 +229,7 @@ export default function SuppliersPage() {
       total_cost: totalCost,
       amount_paid: purchaseForm.amount_paid,
       status: 'delivered',
-      user_id: user.id // LIAISON CRITIQUE
+      user_id: user.id
     });
 
     if (purchaseError) {
@@ -273,21 +283,34 @@ export default function SuppliersPage() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 flex items-center justify-between shadow-sm">
+      {/* KPIs - 3 Colonnes */}
+      <div className="grid md:grid-cols-3 gap-6">
+        {/* Total Mois */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border flex items-center justify-between">
           <div>
-            <p className="text-sm text-blue-600 font-medium uppercase">Total des Achats</p>
-            <p className="text-2xl font-bold text-blue-800 mt-1">{formatMoney(totalSpending)}</p>
+            <p className="text-sm text-gray-500 font-medium">Total Achats (Ce Mois)</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{formatMoney(totalSpendingMonth)}</p>
           </div>
-          <div className="p-4 bg-white rounded-full shadow-sm text-blue-600">
-            <DollarSign size={24} />
+          <div className="p-3 bg-indigo-100 rounded-lg text-indigo-600">
+            <CalendarDays size={24} />
           </div>
         </div>
 
+        {/* Total Historique */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Total Achats (Historique)</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{formatMoney(totalSpendingAllTime)}</p>
+          </div>
+          <div className="p-3 bg-blue-100 rounded-lg text-blue-600">
+            <History size={24} />
+          </div>
+        </div>
+
+        {/* Dettes */}
         <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-xl p-6 flex items-center justify-between shadow-sm">
           <div>
-            <p className="text-sm text-red-600 font-medium uppercase">Dettes Fournisseurs (Reste à payer)</p>
+            <p className="text-sm text-red-600 font-medium">Dettes Fournisseurs</p>
             <p className="text-2xl font-bold text-red-700 mt-1">{formatMoney(totalDebt)}</p>
           </div>
           <div className="p-4 bg-white rounded-full shadow-sm text-red-600">
@@ -460,7 +483,7 @@ export default function SuppliersPage() {
                               >
                                 Payer
                               </button>
-            )}
+                            )}
                           </td>
                         </tr>
                       );
