@@ -36,7 +36,6 @@ export default function OrdersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   
-  // Formulaire
   const [newOrder, setNewOrder] = useState({
     customer_name: '',
     customer_phone: '',
@@ -45,7 +44,7 @@ export default function OrdersPage() {
     quantity: 1,
     source: 'website',
     status: 'new',
-    carrier: '' // Nouveau champ
+    carrier: ''
   });
 
   useEffect(() => {
@@ -65,7 +64,6 @@ export default function OrdersPage() {
     setLoading(false);
   }
 
-  // --- Création Commande ---
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     const { data: { user } } = await supabase.auth.getUser();
@@ -91,8 +89,7 @@ export default function OrdersPage() {
     }
   };
 
-  // --- Mise à jour Statut ---
-    const updateOrderStatus = async (id: string, status: string) => {
+  const updateOrderStatus = async (id: string, status: string) => {
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
     
     if (error) {
@@ -103,7 +100,6 @@ export default function OrdersPage() {
     }
   };
 
-  // --- Filtres ---
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
       const matchesSearch = 
@@ -120,13 +116,12 @@ export default function OrdersPage() {
     return { revenue, count };
   }, [filteredOrders]);
 
-  // --- Helper Couleurs Statut ---
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'new': return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'confirmed': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
       case 'delivered': return 'bg-green-100 text-green-700 border-green-200';
-      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200';
+      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'; // Ajouté
       default: return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
@@ -136,7 +131,7 @@ export default function OrdersPage() {
       case 'new': return 'Nouveau';
       case 'confirmed': return 'Confirmée';
       case 'delivered': return 'Livrée';
-      case 'cancelled': return 'Annulée';
+      case 'cancelled': return 'Annulée'; // Ajouté
       default: return status;
     }
   };
@@ -150,7 +145,6 @@ export default function OrdersPage() {
         </button>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4">
           <div className="p-3 bg-blue-100 rounded-lg text-blue-600"><Truck size={22} /></div>
@@ -162,7 +156,6 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Filtres */}
       <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -173,10 +166,10 @@ export default function OrdersPage() {
           <option value="new">Nouveau</option>
           <option value="confirmed">Confirmée</option>
           <option value="delivered">Livrée</option>
+          <option value="cancelled">Annulée</option> {/* Ajouté */}
         </select>
       </div>
 
-      {/* Tableau */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -265,7 +258,6 @@ export default function OrdersPage() {
                   </select>
                 </div>
 
-                {/* Champ Transporteur */}
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Transporteur (Optionnel)</label>
                   <input
