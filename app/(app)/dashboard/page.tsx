@@ -5,11 +5,16 @@ import { supabase } from '@/lib/supabase';
 import { formatMoney } from '@/lib/utils';
 import Link from 'next/link';
 import { ShoppingBag, Package, TrendingUp, AlertCircle, ArrowRight, Plus } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({ revenue: 0, orders: 0, products: 0, lowStock: 0 });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Données pour les graphiques
+  const [revenueChartData, setRevenueChartData] = useState<any[]>([]);
+  const [orderStatusData, setOrderStatusData] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -18,8 +23,8 @@ export default function DashboardPage() {
   async function fetchDashboardData() {
     setLoading(true);
 
-    // 1. Stats globales
-    const { data: ordersData } = await supabase.from('orders').select('total_amount, status');
+    // 1. Stats globales & Graphiques
+    const { data: ordersData } = await supabase.from('orders').select('total_amount, status, created_at');
     const { count: productsCount } = await supabase.from('products').select('*', { count: 'exact', head: true });
     const { data: lowStockData } = await supabase.from('products').select('id').lt('stock_quantity', 5);
 
@@ -31,6 +36,44 @@ export default function DashboardPage() {
         products: productsCount || 0,
         lowStock: lowStockData?.length || 0
       });
+
+      // Préparer les données pour le graphique de revenus (7 derniers jours)
+      const last7Days: { [key: string]: number } = {};
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0]; // YYYY-MM-DD
+        last7Days[key] = 0;
+      }
+
+      ordersData.forEach(order => {
+        if (order.created_at) {
+          const dateKey = order.created_at.split('T')[0];
+          if (last7Days.hasOwnProperty(dateKey)) {
+            last7Days[dateKey] += order.total_amount || 0;
+          }
+        }
+      });
+
+      const chartData = Object.keys(last7Days).map(date => ({
+        date: new Date(date).toLocaleDateString('fr-FR', { weekday: 'short' }),
+        revenue: last7Days[date]
+      }));
+      setRevenueChartData(chartData);
+
+      // Préparer les données pour le Pie Chart (Statuts)
+      const statusCounts: { [key: string]: number } = { 'new': 0, 'confirmed': 0, 'delivered': 0, 'cancelled': 0 };
+      ordersData.forEach(o => {
+        if (statusCounts.hasOwnProperty(o.status)) statusCounts[o.status]++;
+      });
+      
+      const pieData = [
+        { name: 'Nouveaux', value: statusCounts.new, color: '#3B82F6' },
+        { name: 'Confirmés', value: statusCounts.confirmed, color: '#F59E0B' },
+        { name: 'Livrés', value: statusCounts.delivered, color: '#10B981' },
+        { name: 'Annulés', value: statusCounts.cancelled, color: '#EF4444' },
+      ];
+      setOrderStatusData(pieData);
     }
 
     // 2. Commandes récentes
@@ -126,6 +169,52 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Graphiques */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Graphique Revenus (2/3 de la largeur) */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border">
+          <h3 className="text-lg font-bold mb-4 text-gray-900">Revenus (7 derniers jours)</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={revenueChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip formatter={(value: number) => formatMoney(value)} />
+                <Line type="monotone" dataKey="revenue" stroke="#E67E22" strokeWidth={2} activeDot={{ r: 8 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Graphique Statuts (1/3 de la largeur) */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border">
+          <h3 className="text-lg font-bold mb-4 text-gray-900">Statut des commandes</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={orderStatusData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {orderStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
       {/* Commandes Récentes */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="p-6 border-b flex justify-between items-center">
@@ -155,7 +244,6 @@ export default function DashboardPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-gray-500">{order.products?.name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-right font-medium">{formatMoney(order.total_amount)}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {/* C'est ici qu'on utilise la traduction */}
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
                         {getStatusLabel(order.status)}
                       </span>
@@ -168,7 +256,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions - Bouton Ajouter Produit en bas */}
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-gradient-to-r from-[#1A5276] to-blue-800 rounded-xl p-6 text-white shadow-lg">
           <h3 className="text-lg font-bold mb-2">Prêt à vendre ?</h3>
