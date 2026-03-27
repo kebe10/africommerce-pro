@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { formatMoney } from '@/lib/utils';
-import { Plus, X, CheckCircle, Truck, AlertCircle, Loader2, Search, Edit2, Trash2 } from 'lucide-react';
+import { Plus, X, CheckCircle, Truck, Loader2, Search, Download } from 'lucide-react';
 
 type Product = {
   id: string;
@@ -25,6 +25,8 @@ type Order = {
   source: string;
   status: string;
   carrier: string | null;
+  delivery_cost: number;
+  ad_cost_per_order: number;
   products: { name: string } | null;
 };
 
@@ -44,7 +46,9 @@ export default function OrdersPage() {
     quantity: 1,
     source: 'website',
     status: 'new',
-    carrier: ''
+    carrier: '',
+    delivery_cost: 0,        // NOUVEAU
+    ad_cost_per_order: 0     // NOUVEAU
   });
 
   useEffect(() => {
@@ -59,8 +63,9 @@ export default function OrdersPage() {
 
   async function fetchOrders() {
     setLoading(true);
+    // On sélectionne aussi les nouveaux champs
     const { data } = await supabase.from('orders').select('*, products(name)').order('created_at', { ascending: false });
-    if (data) setOrders(data);
+    if (data) setOrders(data as Order[]);
     setLoading(false);
   }
 
@@ -84,20 +89,46 @@ export default function OrdersPage() {
     if (error) alert("Erreur lors de la création");
     else {
       setIsModalOpen(false);
-      setNewOrder({ customer_name: '', customer_phone: '', customer_city: '', product_id: '', quantity: 1, source: 'website', status: 'new', carrier: '' });
+      setNewOrder({ 
+        customer_name: '', customer_phone: '', customer_city: '', product_id: '', quantity: 1, 
+        source: 'website', status: 'new', carrier: '', delivery_cost: 0, ad_cost_per_order: 0 
+      });
       fetchOrders();
     }
   };
 
   const updateOrderStatus = async (id: string, status: string) => {
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+    if (error) alert("Erreur mise à jour: " + error.message);
+    else fetchOrders();
+  };
+
+  // --- EXPORT CSV ---
+  const exportToCSV = () => {
+    if (filteredOrders.length === 0) return alert("Aucune donnée à exporter.");
     
-    if (error) {
-      console.error("Erreur Supabase:", error);
-      alert("Erreur mise à jour: " + error.message);
-    } else {
-      fetchOrders();
-    }
+    const headers = ["Client", "Téléphone", "Ville", "Produit", "Quantité", "Montant Total", "Statut", "Transporteur", "Frais Livraison", "Coût Pub", "Date"];
+    
+    const rows = filteredOrders.map(order => [
+      order.customer_name,
+      order.customer_phone,
+      order.customer_city,
+      order.products?.name || 'N/A',
+      order.quantity,
+      order.total_amount,
+      getStatusLabel(order.status),
+      order.carrier || '',
+      order.delivery_cost || 0,
+      order.ad_cost_per_order || 0,
+      new Date(order.created_at).toLocaleDateString('fr-FR')
+    ]);
+
+    const csvContent = "\uFEFF" + headers.join(";") + "\n" + rows.map(r => r.join(";")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `commandes_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
   };
 
   const filteredOrders = useMemo(() => {
@@ -121,7 +152,7 @@ export default function OrdersPage() {
       case 'new': return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'confirmed': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
       case 'delivered': return 'bg-green-100 text-green-700 border-green-200';
-      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'; // Ajouté
+      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200';
       default: return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
@@ -131,7 +162,7 @@ export default function OrdersPage() {
       case 'new': return 'Nouveau';
       case 'confirmed': return 'Confirmée';
       case 'delivered': return 'Livrée';
-      case 'cancelled': return 'Annulée'; // Ajouté
+      case 'cancelled': return 'Annulée';
       default: return status;
     }
   };
@@ -140,11 +171,17 @@ export default function OrdersPage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div><h1 className="text-2xl font-bold text-gray-900">Commandes</h1><p className="text-gray-500 text-sm">{stats.count} commandes</p></div>
-        <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-[#E67E22] hover:bg-orange-600 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium">
-          <Plus size={18} /> Nouvelle Commande
-        </button>
+        <div className="flex gap-2">
+            <button onClick={exportToCSV} className="flex items-center gap-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">
+                <Download size={18} /> Exporter
+            </button>
+            <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-[#E67E22] hover:bg-orange-600 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium">
+                <Plus size={18} /> Nouvelle Commande
+            </button>
+        </div>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4">
           <div className="p-3 bg-blue-100 rounded-lg text-blue-600"><Truck size={22} /></div>
@@ -156,6 +193,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      {/* Filtres */}
       <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -166,10 +204,11 @@ export default function OrdersPage() {
           <option value="new">Nouveau</option>
           <option value="confirmed">Confirmée</option>
           <option value="delivered">Livrée</option>
-          <option value="cancelled">Annulée</option> {/* Ajouté */}
+          <option value="cancelled">Annulée</option>
         </select>
       </div>
 
+      {/* Tableau */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -259,13 +298,35 @@ export default function OrdersPage() {
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Transporteur (Optionnel)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Transporteur</label>
                   <input
                     type="text"
                     value={newOrder.carrier}
                     onChange={(e) => setNewOrder({...newOrder, carrier: e.target.value})}
                     className="w-full border rounded-lg p-2.5"
-                    placeholder="Ex: Zem Moto, Ali..."
+                    placeholder="Ex: Zem Moto..."
+                  />
+                </div>
+
+                {/* NOUVEAUX CHAMPS */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Frais Livraison</label>
+                  <input
+                    type="number"
+                    value={newOrder.delivery_cost}
+                    onChange={(e) => setNewOrder({...newOrder, delivery_cost: Number(e.target.value)})}
+                    className="w-full border rounded-lg p-2.5"
+                    placeholder="Ex: 1500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Coût Pub</label>
+                  <input
+                    type="number"
+                    value={newOrder.ad_cost_per_order}
+                    onChange={(e) => setNewOrder({...newOrder, ad_cost_per_order: Number(e.target.value)})}
+                    className="w-full border rounded-lg p-2.5"
+                    placeholder="Ex: 500"
                   />
                 </div>
 
