@@ -106,8 +106,9 @@ export default function DashboardPage() {
       return;
     }
 
-    if (data) {
-      const typed = data as OrderWithProduct[];
+        if (data) {
+      // CORRECTION : On utilise 'unknown' pour forcer TypeScript à accepter le format
+      const typed = data as unknown as OrderWithProduct[];
       setOrders(typed);
       setKpis(calculateKPIs(typed));
       setChartData(prepareChartData(typed));
