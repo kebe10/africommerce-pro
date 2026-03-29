@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "./globals.css"; // Important pour garder les styles Tailwind
+import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AfriCommerce Pro",
-  description: "Gérez votre e-commerce africain avec clarté",
+  title: "AfriCommerce Pro — Gérez votre e-commerce africain",
+  description:
+    "Le premier outil de gestion e-commerce pour la Côte d'Ivoire, le Sénégal et le Cameroun.",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="fr">
       <body className={inter.className}>
