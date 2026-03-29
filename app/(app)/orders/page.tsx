@@ -152,9 +152,21 @@ export default function OrdersPage() {
     else if (data) setOrders(data as Order[]);
   }
 
+  // ── Filtrage ──────────────────────────────────────────────────────────────
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      const matchSearch = o.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
+        || o.customer_phone.includes(searchQuery)
+        || o.order_number?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchStatus = statusFilter === 'all' || o.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [orders, searchQuery, statusFilter]);
+
   // ── Stats ─────────────────────────────────────────────────────────────────
 
-  // CORRECTION : 4 KPIs complets
+  // CORRECTION : déclaré après filteredOrders
   const stats = useMemo(() => {
     const delivered = filteredOrders.filter(o => o.status === 'delivered');
     const pending   = filteredOrders.filter(o => ['new', 'confirmed', 'shipped'].includes(o.status));
@@ -167,18 +179,6 @@ export default function OrdersPage() {
       failed:  failed.length,
     };
   }, [filteredOrders]);
-
-  // ── Filtrage ──────────────────────────────────────────────────────────────
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
-      const matchSearch = o.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
-        || o.customer_phone.includes(searchQuery)
-        || o.order_number?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchStatus = statusFilter === 'all' || o.status === statusFilter;
-      return matchSearch && matchStatus;
-    });
-  }, [orders, searchQuery, statusFilter]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
