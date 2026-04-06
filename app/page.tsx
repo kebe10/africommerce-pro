@@ -9,10 +9,8 @@ import {
 } from 'lucide-react';
 
 export default function LandingPage() {
-  // CORRECTION : état scroll pour navbar
-  const [scrolled, setScrolled]   = useState(false);
-  // CORRECTION : menu mobile
-  const [menuOpen, setMenuOpen]   = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -36,16 +34,14 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="text-xl font-bold text-[#1A5276]">AfriCommerce Pro</div>
 
-          {/* Menu desktop */}
           <div className="hidden md:flex items-center gap-6 text-sm text-gray-600">
-            <a href="#features"      className="hover:text-[#1A5276] transition">Fonctionnalités</a>
-            <a href="#pricing"       className="hover:text-[#1A5276] transition">Tarifs</a>
-            <a href="#testimonials"  className="hover:text-[#1A5276] transition">Témoignages</a>
-            <a href="#faq"           className="hover:text-[#1A5276] transition">FAQ</a>
+            <a href="#features"     className="hover:text-[#1A5276] transition">Fonctionnalités</a>
+            <a href="#pricing"      className="hover:text-[#1A5276] transition">Tarifs</a>
+            <a href="#testimonials" className="hover:text-[#1A5276] transition">Témoignages</a>
+            <a href="#faq"          className="hover:text-[#1A5276] transition">FAQ</a>
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            {/* CORRECTION : login séparé du register */}
             <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-[#1A5276] transition">
               Connexion
             </Link>
@@ -55,7 +51,6 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          {/* CORRECTION : bouton hamburger mobile */}
           <button
             className="md:hidden p-2 text-gray-600 hover:text-[#1A5276] transition"
             onClick={() => setMenuOpen(p => !p)}
@@ -65,7 +60,6 @@ export default function LandingPage() {
           </button>
         </div>
 
-        {/* CORRECTION : menu mobile déroulant */}
         {menuOpen && (
           <div className="md:hidden bg-white border-t border-gray-100 px-4 py-4 space-y-3 shadow-lg">
             <a href="#features"     onClick={() => setMenuOpen(false)} className="block text-sm text-gray-700 py-2 hover:text-[#1A5276]">Fonctionnalités</a>
@@ -88,6 +82,8 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center relative z-10">
+
+          {/* Colonne gauche — texte */}
           <div>
             <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-3 py-1 rounded-full text-xs font-bold mb-6 text-orange-300 uppercase tracking-wide">
               <Zap size={14} /> Le 1er outil Rentabilité pour l'Afrique
@@ -119,50 +115,31 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* CORRECTION : placeholder remplacé par encart descriptif en attendant la vraie capture */}
+          {/* Colonne droite — image dashboard */}
           <div className="relative hidden lg:block">
-            <div className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-sm">
-              <div className="bg-white rounded-xl p-4 mb-3 flex items-center justify-between shadow-sm">
-                <div>
-                  <p className="text-xs text-gray-500">Profit Réel (ce mois)</p>
-                  <p className="text-2xl font-bold text-green-600">+482 000 FCFA</p>
-                </div>
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <TrendingUp size={20} className="text-green-600" />
-                </div>
+            <div className="bg-white rounded-2xl shadow-2xl border p-2 transform rotate-1 hover:rotate-0 transition-transform duration-500">
+              <img
+                src="https://hovsjhxghvrnxcdyuedh.supabase.co/storage/v1/object/public/image%20africommerce%20pro/tableau%20de%20bord%20africommerce%20pro.%20v2.PNG"
+                alt="Dashboard AfriCommerce Pro"
+                className="rounded-xl w-full"
+              />
+            </div>
+            {/* Badge flottant */}
+            <div className="absolute -bottom-4 -left-4 bg-white rounded-xl shadow-lg p-3 flex items-center gap-2">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 text-sm font-bold">✓</span>
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div className="bg-white rounded-xl p-3 shadow-sm">
-                  <p className="text-xs text-gray-500">Taux succès livraison</p>
-                  <p className="text-xl font-bold text-[#1A5276]">72%</p>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                    <div className="bg-[#1A5276] h-1.5 rounded-full" style={{ width: '72%' }} />
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl p-3 shadow-sm">
-                  <p className="text-xs text-gray-500">Commandes ce mois</p>
-                  <p className="text-xl font-bold text-[#1A5276]">128</p>
-                  <p className="text-xs text-green-500 font-medium">+23% vs mois dernier</p>
-                </div>
-              </div>
-              <div className="bg-[#E67E22]/10 border border-[#E67E22]/30 rounded-xl p-3">
-                <p className="text-xs text-orange-300 font-medium mb-1">💡 Calculateur — Produit : Crème Éclat</p>
-                <div className="flex justify-between text-xs text-white/80">
-                  <span>Coût réel par produit livré</span>
-                  <span className="font-bold text-white">8 143 FCFA</span>
-                </div>
-                <div className="flex justify-between text-xs mt-1">
-                  <span className="text-blue-200">Prix recommandé</span>
-                  <span className="font-bold text-[#E67E22]">15 000 FCFA</span>
-                </div>
+              <div>
+                <p className="text-xs font-bold text-gray-900">Profit réel calculé</p>
+                <p className="text-xs text-green-600">+482 000 FCFA ce mois</p>
               </div>
             </div>
           </div>
+
         </div>
       </section>
 
       {/* ── SOCIAL PROOF ─────────────────────────────────────────────────────── */}
-      {/* CORRECTION : statistiques réelles au lieu de faux noms */}
       <section className="py-12 bg-gray-50 border-y">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-gray-500 text-sm mb-8 uppercase font-bold tracking-wider">
@@ -197,34 +174,27 @@ export default function LandingPage() {
             L'e-commerce en Afrique est unique. Voici pourquoi les méthodes classiques échouent.
           </p>
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                icon: <Truck size={24} />,
-                color: 'red',
-                title: 'Échecs de Livraison',
-                text: '30% de vos colis reviennent ? Vous perdez le produit ET la livraison. C\'est ingérable sans outil adapté.',
-              },
-              {
-                icon: <DollarSign size={24} />,
-                color: 'orange',
-                title: 'Prix Incorrects',
-                text: 'Vous calculez sans inclure les coûts cachés et le taux d\'échec ? Vous vendez à perte sans le savoir.',
-              },
-              {
-                icon: <Users size={24} />,
-                color: 'blue',
-                title: 'Clients Indélicats',
-                text: 'Certains clients commandent mais ne paient jamais. Comment les identifier avant d\'envoyer ?',
-              },
-            ].map(({ icon, color, title, text }) => (
-              <div key={title} className={`bg-${color}-50 p-8 rounded-xl border border-${color}-100 hover:shadow-lg transition`}>
-                <div className={`w-12 h-12 bg-${color}-100 rounded-full flex items-center justify-center text-${color}-600 mb-4`}>
-                  {icon}
-                </div>
-                <h3 className="font-bold text-lg mb-2">{title}</h3>
-                <p className="text-sm text-gray-600">{text}</p>
+            <div className="bg-red-50 p-8 rounded-xl border border-red-100 hover:shadow-lg transition">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 mb-4">
+                <Truck size={24} />
               </div>
-            ))}
+              <h3 className="font-bold text-lg mb-2">Échecs de Livraison</h3>
+              <p className="text-sm text-gray-600">30% de vos colis reviennent ? Vous perdez le produit ET la livraison. C'est ingérable sans outil adapté.</p>
+            </div>
+            <div className="bg-orange-50 p-8 rounded-xl border border-orange-100 hover:shadow-lg transition">
+              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 mb-4">
+                <DollarSign size={24} />
+              </div>
+              <h3 className="font-bold text-lg mb-2">Prix Incorrects</h3>
+              <p className="text-sm text-gray-600">Vous calculez sans inclure les coûts cachés et le taux d'échec ? Vous vendez à perte sans le savoir.</p>
+            </div>
+            <div className="bg-blue-50 p-8 rounded-xl border border-blue-100 hover:shadow-lg transition">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                <Users size={24} />
+              </div>
+              <h3 className="font-bold text-lg mb-2">Clients Indélicats</h3>
+              <p className="text-sm text-gray-600">Certains clients commandent mais ne paient jamais. Comment les identifier avant d'envoyer ?</p>
+            </div>
           </div>
         </div>
       </section>
@@ -236,7 +206,6 @@ export default function LandingPage() {
           <p className="text-center text-gray-400 mb-16 max-w-2xl mx-auto">
             AfriCommerce Pro a été conçu pour résoudre exactement ces problèmes.
           </p>
-
           <div className="grid lg:grid-cols-2 gap-10 items-center">
             <div className="bg-[#1A5276] p-8 rounded-2xl shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
@@ -255,7 +224,6 @@ export default function LandingPage() {
                 ))}
               </ul>
             </div>
-
             <div className="space-y-4">
               {[
                 { icon: <ShieldCheck size={20} />, title: 'Score de Fiabilité Client', text: 'Identifiez automatiquement les "mauvais payeurs" grâce à notre algorithme de scoring.' },
@@ -283,24 +251,9 @@ export default function LandingPage() {
           <p className="text-gray-500 mb-12">Des e-commerçants comme vous, qui ont transformé leur business.</p>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              {
-                quote: '"Je pensais gagner 15 000 FCFA par commande, en réalité je perdais de l\'argent. Grâce au calculateur, j\'ai ajusté mes prix et mon bénéfice a doublé en 2 mois."',
-                name: 'Amadou K.',
-                city: 'Abidjan',
-                flag: '🇨🇮',
-              },
-              {
-                quote: '"Le score client m\'a permis d\'arrêter de livrer aux clients qui ne paient jamais. Moins de stress, plus de revenus. C\'est exactement ce dont j\'avais besoin."',
-                name: 'Fatou D.',
-                city: 'Dakar',
-                flag: '🇸🇳',
-              },
-              {
-                quote: '"Enfin un outil qui comprend les réalités du marché africain. L\'intégration WhatsApp me fait gagner un temps fou chaque jour."',
-                name: 'Jean-Pierre M.',
-                city: 'Douala',
-                flag: '🇨🇲',
-              },
+              { quote: '"Je pensais gagner 15 000 FCFA par commande, en réalité je perdais de l\'argent. Grâce au calculateur, j\'ai ajusté mes prix et mon bénéfice a doublé en 2 mois."', name: 'Amadou K.', city: 'Abidjan', flag: '🇨🇮' },
+              { quote: '"Le score client m\'a permis d\'arrêter de livrer aux clients qui ne paient jamais. Moins de stress, plus de revenus. C\'est exactement ce dont j\'avais besoin."', name: 'Fatou D.', city: 'Dakar', flag: '🇸🇳' },
+              { quote: '"Enfin un outil qui comprend les réalités du marché africain. L\'intégration WhatsApp me fait gagner un temps fou chaque jour."', name: 'Jean-Pierre M.', city: 'Douala', flag: '🇨🇲' },
             ].map(({ quote, name, city, flag }) => (
               <div key={name} className="bg-gray-50 p-6 rounded-xl border text-left hover:shadow-md transition">
                 <div className="flex text-yellow-400 mb-3">
@@ -321,11 +274,8 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-4">Un prix adapté à votre réussite</h2>
           <p className="text-gray-500 mb-12">Essai gratuit de 14 jours. Aucune carte bancaire requise.</p>
-
-          {/* CORRECTION : 3 plans comme dans les specs */}
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
 
-            {/* Plan Découverte */}
             <div className="bg-white p-8 rounded-2xl shadow-sm border hover:shadow-md transition text-left flex flex-col">
               <div>
                 <h3 className="font-bold text-lg mb-1">Découverte</h3>
@@ -336,19 +286,15 @@ export default function LandingPage() {
                 </div>
                 <ul className="text-sm space-y-3 mb-8 text-gray-600">
                   {['50 commandes/mois', '1 utilisateur', 'Calculateur de rentabilité', 'Score de fiabilité client'].map(f => (
-                    <li key={f} className="flex items-center gap-2">
-                      <CheckCircle size={14} className="text-[#1A5276] shrink-0" /> {f}
-                    </li>
+                    <li key={f} className="flex items-center gap-2"><CheckCircle size={14} className="text-[#1A5276] shrink-0" /> {f}</li>
                   ))}
                 </ul>
               </div>
-              <Link href="/register"
-                className="mt-auto block w-full py-3 border border-gray-200 rounded-xl font-semibold text-sm hover:bg-gray-50 text-center transition">
+              <Link href="/register" className="mt-auto block w-full py-3 border border-gray-200 rounded-xl font-semibold text-sm hover:bg-gray-50 text-center transition">
                 Commencer l'essai gratuit
               </Link>
             </div>
 
-            {/* Plan Pro — CORRECTION : prix aligné avec les specs */}
             <div className="bg-white p-8 rounded-2xl shadow-xl border-2 border-[#E67E22] relative text-left flex flex-col transform scale-105">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#E67E22] text-white px-3 py-1 rounded-full text-xs font-bold uppercase shadow-lg whitespace-nowrap">
                 ⭐ Le plus populaire
@@ -364,14 +310,7 @@ export default function LandingPage() {
                   Code AFRICA50 → <span className="line-through text-gray-400">9 900</span> <strong>4 950 FCFA</strong> les 3 premiers mois
                 </p>
                 <ul className="text-sm space-y-3 mb-8 text-gray-600">
-                  {[
-                    'Tout ce qui est dans Découverte',
-                    '500 commandes/mois',
-                    '3 utilisateurs',
-                    'Intégration WhatsApp',
-                    'Analytics Avancés & Rapports',
-                    'Support prioritaire',
-                  ].map((f, i) => (
+                  {['Tout ce qui est dans Découverte', '500 commandes/mois', '3 utilisateurs', 'Intégration WhatsApp', 'Analytics Avancés & Rapports', 'Support prioritaire'].map((f, i) => (
                     <li key={f} className="flex items-center gap-2">
                       <CheckCircle size={14} className="text-[#E67E22] shrink-0" />
                       {i === 0 ? <strong>{f}</strong> : f}
@@ -379,13 +318,11 @@ export default function LandingPage() {
                   ))}
                 </ul>
               </div>
-              <Link href="/register"
-                className="mt-auto block w-full py-3 bg-[#E67E22] text-white rounded-xl font-semibold text-sm hover:bg-orange-600 shadow-lg shadow-orange-200 text-center transition">
+              <Link href="/register" className="mt-auto block w-full py-3 bg-[#E67E22] text-white rounded-xl font-semibold text-sm hover:bg-orange-600 shadow-lg text-center transition">
                 Essai Gratuit 14 jours
               </Link>
             </div>
 
-            {/* CORRECTION : Plan Business ajouté */}
             <div className="bg-white p-8 rounded-2xl shadow-sm border hover:shadow-md transition text-left flex flex-col">
               <div>
                 <h3 className="font-bold text-lg mb-1">Business</h3>
@@ -395,14 +332,7 @@ export default function LandingPage() {
                   <span className="text-gray-500"> FCFA/mois</span>
                 </div>
                 <ul className="text-sm space-y-3 mb-8 text-gray-600">
-                  {[
-                    'Tout ce qui est dans Pro',
-                    'Commandes illimitées',
-                    '10 utilisateurs',
-                    'API + Intégrations avancées',
-                    'Rapport personnalisé',
-                    'Account manager dédié',
-                  ].map((f, i) => (
+                  {['Tout ce qui est dans Pro', 'Commandes illimitées', '10 utilisateurs', 'API + Intégrations avancées', 'Rapport personnalisé', 'Account manager dédié'].map((f, i) => (
                     <li key={f} className="flex items-center gap-2">
                       <CheckCircle size={14} className="text-[#1A5276] shrink-0" />
                       {i === 0 ? <strong>{f}</strong> : f}
@@ -410,15 +340,12 @@ export default function LandingPage() {
                   ))}
                 </ul>
               </div>
-              <Link href="/register"
-                className="mt-auto block w-full py-3 border border-gray-200 rounded-xl font-semibold text-sm hover:bg-gray-50 text-center transition">
+              <Link href="/register" className="mt-auto block w-full py-3 border border-gray-200 rounded-xl font-semibold text-sm hover:bg-gray-50 text-center transition">
                 Contacter les ventes
               </Link>
             </div>
 
           </div>
-
-          {/* Paiement Mobile Money */}
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-sm text-gray-500">
             <span>💳 Paiement accepté via :</span>
             <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full font-medium">Orange Money</span>
@@ -435,26 +362,11 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold text-center mb-12">Questions Fréquentes</h2>
           <div className="space-y-4">
             {[
-              {
-                q: 'Puis-je payer par Mobile Money ?',
-                a: 'Oui ! Nous acceptons les paiements par Mobile Money (Orange Money, Wave, Moov, MTN MoMo) et cartes bancaires locales et internationales.',
-              },
-              {
-                q: 'Que se passe-t-il après les 14 jours ?',
-                a: 'L\'accès est restreint au plan Découverte (50 commandes/mois). Vous pouvez vous abonner au plan Pro ou Business à tout moment pour continuer à profiter de toutes les fonctionnalités.',
-              },
-              {
-                q: 'Est-ce adapté au dropshipping ?',
-                a: 'Absolument. La gestion des fournisseurs, des délais et des taux d\'échec est parfaitement adaptée au dropshipping africain.',
-              },
-              {
-                q: 'Mes données sont-elles sécurisées ?',
-                a: 'Oui. Toutes vos données sont chiffrées et hébergées sur des serveurs sécurisés. Nous ne partageons jamais vos données avec des tiers.',
-              },
-              {
-                q: 'Puis-je annuler à tout moment ?',
-                a: 'Oui, sans engagement et sans frais. Vous pouvez annuler votre abonnement depuis les paramètres de votre compte à tout moment.',
-              },
+              { q: 'Puis-je payer par Mobile Money ?', a: 'Oui ! Nous acceptons les paiements par Mobile Money (Orange Money, Wave, Moov, MTN MoMo) et cartes bancaires locales et internationales.' },
+              { q: 'Que se passe-t-il après les 14 jours ?', a: "L'accès est restreint au plan Découverte (50 commandes/mois). Vous pouvez vous abonner au plan Pro ou Business à tout moment pour continuer à profiter de toutes les fonctionnalités." },
+              { q: 'Est-ce adapté au dropshipping ?', a: "Absolument. La gestion des fournisseurs, des délais et des taux d'échec est parfaitement adaptée au dropshipping africain." },
+              { q: 'Mes données sont-elles sécurisées ?', a: "Oui. Toutes vos données sont chiffrées et hébergées sur des serveurs sécurisés. Nous ne partageons jamais vos données avec des tiers." },
+              { q: 'Puis-je annuler à tout moment ?', a: "Oui, sans engagement et sans frais. Vous pouvez annuler votre abonnement depuis les paramètres de votre compte à tout moment." },
             ].map(({ q, a }) => (
               <div key={q} className="bg-white p-6 rounded-xl border shadow-sm hover:shadow-md transition">
                 <h4 className="font-bold mb-2 text-gray-900">{q}</h4>
@@ -466,7 +378,6 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA FINAL ────────────────────────────────────────────────────────── */}
-      {/* CORRECTION : section CTA finale ajoutée */}
       <section className="py-20 px-4 bg-gradient-to-r from-[#1A5276] to-blue-900 text-white text-center">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-extrabold mb-4">
@@ -526,7 +437,7 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* CORRECTION : bouton WhatsApp flottant */}
+      {/* Bouton WhatsApp flottant */}
       <a
         href="https://wa.me/2250700000000?text=Bonjour%2C%20je%20veux%20en%20savoir%20plus%20sur%20AfriCommerce%20Pro"
         target="_blank"
