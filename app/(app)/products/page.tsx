@@ -318,7 +318,8 @@ export default function ProductsPage() {
               <div key={product.id} className={`bg-white rounded-xl shadow-sm border flex flex-col hover:shadow-md transition ${isOutOfStock ? 'border-red-400 border-2' : isLowStock ? 'border-orange-400 border-2' : 'border-gray-100'}`}>
                 <div className="h-40 bg-gray-100 relative flex items-center justify-center text-gray-400 group overflow-hidden rounded-t-xl">
                   {product.photo_url ? (
-                    <img src={product.photo_url} alt={product.name} className="w-full h-full object-cover"
+                    // ✅ Image entière visible avec fond blanc
+                    <img src={product.photo_url} alt={product.name} className="w-full h-full object-contain p-2 bg-white"
                       onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : <Package size={40} strokeWidth={1} />}
                   <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
