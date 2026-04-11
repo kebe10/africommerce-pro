@@ -7,7 +7,8 @@ import { formatMoney, calculateMargin } from '@/lib/utils';
 import {
   Plus, Minus, Edit2, Trash2, Package,
   Search, X, TrendingUp, AlertTriangle,
-  Lightbulb, BarChart2, Upload, Camera, Loader2
+  Lightbulb, BarChart2, Upload, Camera, Loader2,
+  Tag, ChevronDown
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ type FormData = {
   selling_price: number;
   stock_quantity: number;
   low_stock_threshold: number;
+  status: string;
 };
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -42,6 +44,7 @@ const EMPTY_FORM: FormData = {
   name: '', sku: '', category: '', photo_url: '',
   purchase_cost: 0, selling_price: 0,
   stock_quantity: 0, low_stock_threshold: 10,
+  status: 'active',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -67,19 +70,23 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
 
   // — UI
-  const [loading, setLoading]           = useState(true);
-  const [searchQuery, setSearchQuery]   = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'out_of_stock' | 'archived'>('all');
-  const [isModalOpen, setIsModalOpen]   = useState(false);
-  const [isEditing, setIsEditing]       = useState(false);
-  const [editingId, setEditingId]       = useState<string | null>(null);
-  const [formData, setFormData]         = useState<FormData>(EMPTY_FORM);
+  const [loading, setLoading]             = useState(true);
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [statusFilter, setStatusFilter]   = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [isModalOpen, setIsModalOpen]     = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isEditing, setIsEditing]         = useState(false);
+  const [editingId, setEditingId]         = useState<string | null>(null);
+  const [formData, setFormData]           = useState<FormData>(EMPTY_FORM);
+  const [newCategory, setNewCategory]     = useState('');
+  const [successMsg, setSuccessMsg]       = useState<string | null>(null);
 
   // — Upload photo
-  const fileInputRef                          = useRef<HTMLInputElement>(null);
-  const [photoPreview, setPhotoPreview]       = useState<string | null>(null);
-  const [photoFile, setPhotoFile]             = useState<File | null>(null);
-  const [uploadingPhoto, setUploadingPhoto]   = useState(false);
+  const fileInputRef                        = useRef<HTMLInputElement>(null);
+  const [photoPreview, setPhotoPreview]     = useState<string | null>(null);
+  const [photoFile, setPhotoFile]           = useState<File | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -103,62 +110,62 @@ export default function ProductsPage() {
     totalValue: products.reduce((acc, p) => acc + (p.purchase_cost * p.stock_quantity), 0),
   }), [products]);
 
-  // ── Filtrage ──────────────────────────────────────────────────────────────
+  // ── Catégories extraites des produits ─────────────────────────────────────
+
+  // CORRECTION : liste des catégories uniques extraites des produits
+  const categories = useMemo(() => {
+    const cats = products
+      .map(p => p.category)
+      .filter(c => c && c.trim() !== '');
+    return [...new Set(cats)].sort();
+  }, [products]);
+
+  // ── Filtrage CORRIGÉ ──────────────────────────────────────────────────────
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
-        || p.sku?.toLowerCase().includes(searchQuery.toLowerCase());
+      // Filtre recherche texte
+      const matchSearch = !searchQuery
+        || p.name.toLowerCase().includes(searchQuery.toLowerCase())
+        || (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase())
+        || (p.category ?? '').toLowerCase().includes(searchQuery.toLowerCase());
+
+      // CORRECTION : filtre statut — comparaison stricte avec valeur réelle
       const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-      return matchSearch && matchStatus;
+
+      // CORRECTION : filtre catégorie
+      const matchCategory = categoryFilter === 'all'
+        || (categoryFilter === 'none' && (!p.category || p.category.trim() === ''))
+        || p.category === categoryFilter;
+
+      return matchSearch && matchStatus && matchCategory;
     });
-  }, [products, searchQuery, statusFilter]);
+  }, [products, searchQuery, statusFilter, categoryFilter]);
 
   // ── Gestion photo ─────────────────────────────────────────────────────────
 
-  // Sélection d'une photo depuis la galerie
   function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      alert('Veuillez sélectionner une image (JPG, PNG, WEBP...)');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert("L'image est trop lourde. Maximum 5MB.");
-      return;
-    }
-
-    // Afficher la prévisualisation immédiatement
+    if (!file.type.startsWith('image/')) { alert('Sélectionnez une image (JPG, PNG, WEBP...)'); return; }
+    if (file.size > 5 * 1024 * 1024) { alert("Image trop lourde. Maximum 5MB."); return; }
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
     reader.readAsDataURL(file);
     setPhotoFile(file);
   }
 
-  // Upload vers Supabase Storage
   async function uploadPhoto(file: File): Promise<string | null> {
     setUploadingPhoto(true);
     const ext      = file.name.split('.').pop();
     const fileName = `product_${Date.now()}_${Math.random().toString(36).substring(2)}.${ext}`;
-
-    const { error } = await supabase.storage
-      .from('products') // ← nom du bucket Supabase Storage
-      .upload(fileName, file, { cacheControl: '3600', upsert: false });
-
-    if (error) {
-      alert("Erreur upload photo : " + error.message);
-      setUploadingPhoto(false);
-      return null;
-    }
-
+    const { error } = await supabase.storage.from('products').upload(fileName, file, { cacheControl: '3600', upsert: false });
+    if (error) { alert("Erreur upload photo : " + error.message); setUploadingPhoto(false); return null; }
     const { data } = supabase.storage.from('products').getPublicUrl(fileName);
     setUploadingPhoto(false);
     return data.publicUrl;
   }
 
-  // Supprimer la photo sélectionnée
   function removePhoto() {
     setPhotoPreview(null);
     setPhotoFile(null);
@@ -178,6 +185,11 @@ export default function ProductsPage() {
 
   // ── Actions CRUD ──────────────────────────────────────────────────────────
 
+  function showSuccess(msg: string) {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 3000);
+  }
+
   function openAddModal() {
     setFormData(EMPTY_FORM);
     setPhotoPreview(null);
@@ -193,6 +205,7 @@ export default function ProductsPage() {
       category: product.category || '', photo_url: product.photo_url || '',
       purchase_cost: product.purchase_cost, selling_price: product.selling_price,
       stock_quantity: product.stock_quantity, low_stock_threshold: product.low_stock_threshold,
+      status: product.status || 'active',
     });
     setPhotoPreview(product.photo_url || null);
     setPhotoFile(null);
@@ -206,11 +219,10 @@ export default function ProductsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { alert('Vous devez être connecté'); return; }
 
-    // Upload la nouvelle photo si sélectionnée
     let finalPhotoUrl = formData.photo_url;
     if (photoFile) {
       const url = await uploadPhoto(photoFile);
-      if (!url) return; // arrêter si upload échoue
+      if (!url) return;
       finalPhotoUrl = url;
     }
 
@@ -228,6 +240,7 @@ export default function ProductsPage() {
       setPhotoPreview(null);
       setPhotoFile(null);
       fetchProducts();
+      showSuccess(isEditing ? 'Produit mis à jour !' : 'Produit ajouté !');
     }
   }
 
@@ -235,7 +248,29 @@ export default function ProductsPage() {
     if (!confirm('Supprimer ce produit ?')) return;
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) alert('Erreur suppression : ' + error.message);
-    else setProducts(prev => prev.filter(p => p.id !== id));
+    else { setProducts(prev => prev.filter(p => p.id !== id)); showSuccess('Produit supprimé.'); }
+  }
+
+  // CORRECTION : renommer une catégorie sur tous les produits concernés
+  async function handleRenameCategory(oldName: string, newName: string) {
+    if (!newName.trim() || newName === oldName) return;
+    const toUpdate = products.filter(p => p.category === oldName);
+    for (const p of toUpdate) {
+      await supabase.from('products').update({ category: newName.trim() }).eq('id', p.id);
+    }
+    await fetchProducts();
+    showSuccess(`Catégorie "${oldName}" renommée en "${newName}"`);
+  }
+
+  // CORRECTION : supprimer une catégorie (vide la catégorie des produits concernés)
+  async function handleDeleteCategory(name: string) {
+    if (!confirm(`Supprimer la catégorie "${name}" ? Les produits ne seront pas supprimés, seulement leur catégorie sera vidée.`)) return;
+    const toUpdate = products.filter(p => p.category === name);
+    for (const p of toUpdate) {
+      await supabase.from('products').update({ category: '' }).eq('id', p.id);
+    }
+    await fetchProducts();
+    showSuccess(`Catégorie "${name}" supprimée.`);
   }
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
@@ -243,19 +278,31 @@ export default function ProductsPage() {
   return (
     <div className="space-y-6">
 
+      {/* Toast succès */}
+      {successMsg && (
+        <div className="fixed top-4 right-4 z-[100] bg-green-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium">
+          <Package size={16} /> {successMsg}
+        </div>
+      )}
+
       {/* En-tête */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Catalogue Produits</h1>
           <p className="text-gray-500 text-sm">{products.length} produit{products.length > 1 ? 's' : ''}</p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex items-center gap-2 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input type="text" placeholder="Rechercher par nom ou SKU..."
+            <input type="text" placeholder="Rechercher..."
               value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1A5276]" />
           </div>
+          {/* NOUVEAU : bouton Gérer les catégories */}
+          <button onClick={() => setIsCategoryModalOpen(true)}
+            className="flex items-center gap-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-3 py-2 rounded-lg text-sm transition whitespace-nowrap">
+            <Tag size={15} /> Catégories
+          </button>
           <button onClick={openAddModal}
             className="flex items-center gap-2 bg-[#1A5276] hover:bg-blue-900 text-white px-4 py-2 rounded-lg shadow-sm text-sm transition whitespace-nowrap">
             <Plus size={16} /> <span className="hidden sm:inline">Ajouter</span>
@@ -287,25 +334,74 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Filtres statut */}
-      <div className="flex gap-2 flex-wrap">
-        {(['all', 'active', 'paused', 'out_of_stock', 'archived'] as const).map(s => (
-          <button key={s} onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${statusFilter === s ? 'bg-[#1A5276] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            {s === 'all' ? `Tous (${products.length})` : STATUS_LABELS[s]}
+      {/* ── FILTRES CORRIGÉS ─────────────────────────────────────────────── */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-wrap gap-3 items-center">
+
+        {/* Filtre statut — CORRECTION : boutons clairs avec compteur */}
+        <div className="flex flex-wrap gap-1.5">
+          <span className="text-xs text-gray-400 font-medium self-center mr-1">Statut :</span>
+          {([
+            { value: 'all',          label: `Tous (${products.length})` },
+            { value: 'active',       label: `Actifs (${products.filter(p => p.status === 'active').length})` },
+            { value: 'paused',       label: `En pause (${products.filter(p => p.status === 'paused').length})` },
+            { value: 'out_of_stock', label: `Rupture (${products.filter(p => p.status === 'out_of_stock').length})` },
+            { value: 'archived',     label: `Archivés (${products.filter(p => p.status === 'archived').length})` },
+          ] as const).map(({ value, label }) => (
+            <button key={value} onClick={() => setStatusFilter(value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition border ${
+                statusFilter === value
+                  ? 'bg-[#1A5276] text-white border-[#1A5276]'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* CORRECTION : filtre catégorie */}
+        {categories.length > 0 && (
+          <div className="flex items-center gap-2 border-l pl-3">
+            <Tag size={14} className="text-gray-400 shrink-0" />
+            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+              className="border rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#1A5276]">
+              <option value="all">Toutes catégories</option>
+              <option value="none">Sans catégorie</option>
+              {categories.map(c => (
+                <option key={c} value={c}>{c} ({products.filter(p => p.category === c).length})</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Bouton reset filtres */}
+        {(statusFilter !== 'all' || categoryFilter !== 'all' || searchQuery) && (
+          <button
+            onClick={() => { setStatusFilter('all'); setCategoryFilter('all'); setSearchQuery(''); }}
+            className="text-xs text-red-500 hover:text-red-700 underline ml-auto"
+          >
+            Réinitialiser les filtres
           </button>
-        ))}
+        )}
       </div>
+
+      {/* Résultat filtrage */}
+      {(statusFilter !== 'all' || categoryFilter !== 'all' || searchQuery) && (
+        <p className="text-xs text-gray-400 -mt-3">
+          {filteredProducts.length} résultat{filteredProducts.length > 1 ? 's' : ''} sur {products.length} produits
+        </p>
+      )}
 
       {/* Grille produits */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-64 bg-gray-100 rounded-xl animate-pulse" />)}
+          {[...Array(4)].map((_, i) => <div key={i} className="h-72 bg-gray-100 rounded-xl animate-pulse" />)}
         </div>
       ) : filteredProducts.length === 0 ? (
         <div className="py-16 text-center text-gray-400">
           <Package size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-medium">{searchQuery ? `Aucun produit pour "${searchQuery}"` : 'Aucun produit dans cette catégorie'}</p>
+          <p className="text-sm font-medium">
+            {searchQuery ? `Aucun produit pour "${searchQuery}"` : 'Aucun produit dans cette catégorie'}
+          </p>
           <button onClick={openAddModal} className="mt-4 text-sm text-[#1A5276] hover:underline">+ Ajouter un produit</button>
         </div>
       ) : (
@@ -316,26 +412,42 @@ export default function ProductsPage() {
             const isOutOfStock = product.stock_quantity === 0;
             return (
               <div key={product.id} className={`bg-white rounded-xl shadow-sm border flex flex-col hover:shadow-md transition ${isOutOfStock ? 'border-red-400 border-2' : isLowStock ? 'border-orange-400 border-2' : 'border-gray-100'}`}>
-                <div className="h-40 sm:h-52 bg-gray-100 relative flex items-center justify-center text-gray-400 group overflow-hidden rounded-t-xl">
+
+                {/* Image — CORRECTION : h-52 + object-cover pour image grande sans espace */}
+                <div className="h-52 bg-gray-100 relative flex items-center justify-center text-gray-400 group overflow-hidden rounded-t-xl">
                   {product.photo_url ? (
-                    // ✅ Image entière visible avec fond blanc
-                    <img src={product.photo_url} alt={product.name} className="w-full h-full object-cover"
+                    <img src={product.photo_url} alt={product.name}
+                      className="w-full h-full object-cover"
                       onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  ) : <Package size={40} strokeWidth={1} />}
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 opacity-40">
+                      <Package size={40} strokeWidth={1} />
+                      <span className="text-xs">Pas de photo</span>
+                    </div>
+                  )}
                   <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => openEditModal(product)} className="p-2 bg-white rounded-full shadow hover:bg-gray-100 text-blue-600 transition"><Edit2 size={14} /></button>
                     <button onClick={() => handleDelete(product.id)} className="p-2 bg-white rounded-full shadow hover:bg-red-100 text-red-600 transition"><Trash2 size={14} /></button>
                   </div>
                   {isOutOfStock && <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-1 rounded-full font-bold flex items-center gap-1"><X size={9} /> RUPTURE</div>}
                   {isLowStock && !isOutOfStock && <div className="absolute top-2 left-2 bg-orange-500 text-white text-[10px] px-2 py-1 rounded-full font-bold flex items-center gap-1"><AlertTriangle size={9} /> STOCK BAS</div>}
+                  {/* Badge catégorie */}
+                  {product.category && (
+                    <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
+                      {product.category}
+                    </div>
+                  )}
                 </div>
+
                 <div className="p-4 flex-1 flex flex-col">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 min-w-0 pr-2">
                       <h3 className="font-semibold text-gray-900 truncate">{product.name}</h3>
                       <p className="text-xs text-gray-400 font-mono mt-0.5">{product.sku || '—'}</p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[product.status] ?? 'bg-gray-100 text-gray-500'}`}>{STATUS_LABELS[product.status] ?? product.status}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[product.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                      {STATUS_LABELS[product.status] ?? product.status}
+                    </span>
                   </div>
                   <div className="mb-3 text-sm space-y-1">
                     <div className="flex justify-between items-center"><span className="text-gray-500">Achat</span><span className="font-medium text-red-600">{formatMoney(product.purchase_cost)}</span></div>
@@ -353,7 +465,7 @@ export default function ProductsPage() {
                     <span className="text-xs font-medium text-gray-600">Stock</span>
                     <div className="flex items-center gap-2">
                       <button onClick={() => updateStock(product.id, product.stock_quantity - 1)} disabled={product.stock_quantity === 0}
-                        className="w-7 h-7 rounded-full bg-white border flex items-center justify-center text-gray-500 hover:bg-gray-100 transition"><Minus size={13} /></button>
+                        className="w-7 h-7 rounded-full bg-white border flex items-center justify-center text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"><Minus size={13} /></button>
                       <span className={`font-bold w-8 text-center text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-800'}`}>{product.stock_quantity}</span>
                       <button onClick={() => updateStock(product.id, product.stock_quantity + 1)}
                         className="w-7 h-7 rounded-full bg-white border flex items-center justify-center text-gray-500 hover:bg-gray-100 transition"><Plus size={13} /></button>
@@ -366,7 +478,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* ── MODAL ───────────────────────────────────────────────────────────── */}
+      {/* ── MODAL PRODUIT ────────────────────────────────────────────────── */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -374,10 +486,8 @@ export default function ProductsPage() {
               <h2 className="text-xl font-bold">{isEditing ? 'Modifier le produit' : 'Nouveau Produit'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-300 hover:text-gray-500 transition"><X size={22} /></button>
             </div>
-
             <form onSubmit={handleSaveProduct} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit *</label>
                   <input type="text" required value={formData.name}
@@ -385,7 +495,6 @@ export default function ProductsPage() {
                     placeholder="Ex: Crème hydratante 200ml"
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">SKU (Référence)</label>
                   <input type="text" value={formData.sku}
@@ -393,29 +502,41 @@ export default function ProductsPage() {
                     placeholder="PRD-001"
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
+                  {/* CORRECTION : select + option saisie libre */}
                   <input type="text" value={formData.category}
                     onChange={e => setFormData({ ...formData, category: e.target.value })}
-                    placeholder="Cosmétique"
+                    placeholder="Ex: Cosmétique"
+                    list="categories-list"
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
+                  <datalist id="categories-list">
+                    {categories.map(c => <option key={c} value={c} />)}
+                  </datalist>
                 </div>
-
+                {/* CORRECTION : champ statut dans le formulaire */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                  <select value={formData.status}
+                    onChange={e => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full border rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-[#1A5276]">
+                    {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Prix Achat (FCFA) *</label>
                   <input type="number" required min="0" value={formData.purchase_cost}
                     onChange={e => setFormData({ ...formData, purchase_cost: Number(e.target.value) })}
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Prix Vente (FCFA) *</label>
                   <input type="number" required min="0" value={formData.selling_price}
                     onChange={e => setFormData({ ...formData, selling_price: Number(e.target.value) })}
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
-
                 {formData.purchase_cost > 0 && formData.selling_price > 0 && (
                   <div className={`col-span-2 px-3 py-2 rounded-lg text-sm flex justify-between ${calculateMargin(formData.purchase_cost, formData.selling_price) > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                     <span>Marge brute estimée</span>
@@ -425,14 +546,12 @@ export default function ProductsPage() {
                     </span>
                   </div>
                 )}
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Stock Initial *</label>
                   <input type="number" required min="0" value={formData.stock_quantity}
                     onChange={e => setFormData({ ...formData, stock_quantity: Number(e.target.value) })}
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Seuil Alerte Stock</label>
                   <input type="number" min="0" value={formData.low_stock_threshold}
@@ -440,69 +559,40 @@ export default function ProductsPage() {
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
 
-                {/* ── NOUVEAU : Upload photo depuis galerie ────────────────── */}
+                {/* Upload photo */}
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Photo du produit
-                  </label>
-
-                  {/* Prévisualisation si photo sélectionnée ou existante */}
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Photo du produit</label>
                   {photoPreview ? (
                     <div className="relative w-full h-48 rounded-xl overflow-hidden border border-gray-200 mb-2">
                       <img src={photoPreview} alt="Aperçu" className="w-full h-full object-cover" />
-                      {/* Bouton supprimer */}
                       <button type="button" onClick={removePhoto}
-                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow transition"
-                        title="Supprimer la photo">
-                        <X size={14} />
-                      </button>
-                      {/* Bouton changer */}
+                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow transition"><X size={14} /></button>
                       <button type="button" onClick={() => fileInputRef.current?.click()}
                         className="absolute bottom-2 right-2 bg-white hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-lg shadow text-xs font-medium flex items-center gap-1 transition border">
-                        <Camera size={12} /> Changer la photo
+                        <Camera size={12} /> Changer
                       </button>
                     </div>
                   ) : (
-                    /* Zone cliquable pour choisir une photo */
                     <button type="button" onClick={() => fileInputRef.current?.click()}
                       className="w-full h-36 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-[#1A5276] hover:bg-blue-50 transition cursor-pointer">
-                      <div className="p-3 bg-gray-100 rounded-full">
-                        <Upload size={22} className="text-gray-400" />
-                      </div>
+                      <div className="p-3 bg-gray-100 rounded-full"><Upload size={22} className="text-gray-400" /></div>
                       <div className="text-center">
                         <p className="text-sm font-medium text-gray-700">Appuyer pour choisir une photo</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          Depuis votre galerie · JPG, PNG, WEBP · Max 5MB
-                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, WEBP · Max 5MB</p>
                       </div>
                     </button>
                   )}
-
-                  {/* Input file caché — s'ouvre sur clic des boutons */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handlePhotoSelect}
-                  />
-
-                  {/* Indicateur d'upload en cours */}
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
                   {uploadingPhoto && (
                     <div className="flex items-center gap-2 text-sm text-[#1A5276] mt-2 bg-blue-50 px-3 py-2 rounded-lg">
-                      <Loader2 size={14} className="animate-spin" />
-                      Upload de la photo en cours...
+                      <Loader2 size={14} className="animate-spin" /> Upload en cours...
                     </div>
                   )}
                 </div>
-
               </div>
-
               <div className="pt-4 flex justify-end gap-3 border-t">
                 <button type="button" onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">
-                  Annuler
-                </button>
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">Annuler</button>
                 <button type="submit" disabled={uploadingPhoto}
                   className="px-6 py-2.5 bg-[#E67E22] text-white rounded-lg hover:bg-orange-600 font-medium transition disabled:opacity-50 flex items-center gap-2">
                   {uploadingPhoto && <Loader2 size={14} className="animate-spin" />}
@@ -513,6 +603,107 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
+
+      {/* ── MODAL GESTION CATÉGORIES ─────────────────────────────────────── */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b sticky top-0 bg-white flex justify-between items-center z-10">
+              <div>
+                <h2 className="text-xl font-bold">Gérer les catégories</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{categories.length} catégorie{categories.length > 1 ? 's' : ''}</p>
+              </div>
+              <button onClick={() => setIsCategoryModalOpen(false)} className="text-gray-300 hover:text-gray-500 transition"><X size={22} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+
+              {/* Ajouter une nouvelle catégorie */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nouvelle catégorie</label>
+                <div className="flex gap-2">
+                  <input type="text" value={newCategory}
+                    onChange={e => setNewCategory(e.target.value)}
+                    placeholder="Ex: Électronique"
+                    className="flex-1 border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-[#1A5276]"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newCategory.trim() && !categories.includes(newCategory.trim())) {
+                          setFormData(prev => ({ ...prev, category: newCategory.trim() }));
+                          setNewCategory('');
+                          showSuccess(`Catégorie "${newCategory.trim()}" prête à être utilisée lors du prochain ajout de produit.`);
+                        }
+                      }
+                    }}
+                  />
+                  <button type="button"
+                    onClick={() => {
+                      if (newCategory.trim()) {
+                        setNewCategory('');
+                        showSuccess(`Catégorie "${newCategory.trim()}" ajoutée. Elle apparaîtra quand vous créerez un produit avec cette catégorie.`);
+                      }
+                    }}
+                    className="px-4 py-2 bg-[#1A5276] text-white rounded-lg text-sm hover:bg-blue-900 transition">
+                    <Plus size={16} />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Les catégories sont créées en les assignant à un produit.
+                </p>
+              </div>
+
+              {/* Liste des catégories existantes */}
+              {categories.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <Tag size={32} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Aucune catégorie créée.</p>
+                  <p className="text-xs mt-1">Ajoutez une catégorie lors de la création d'un produit.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">Catégories existantes</p>
+                  {categories.map(cat => {
+                    const count = products.filter(p => p.category === cat).length;
+                    const [editing, setEditing] = useState(false);
+                    const [editVal, setEditVal] = useState(cat);
+                    return (
+                      <div key={cat} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
+                        {editing ? (
+                          <>
+                            <input type="text" value={editVal} onChange={e => setEditVal(e.target.value)}
+                              className="flex-1 border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-[#1A5276]" autoFocus />
+                            <button onClick={async () => {
+                              await handleRenameCategory(cat, editVal);
+                              setEditing(false);
+                            }} className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 text-xs">✓</button>
+                            <button onClick={() => { setEditing(false); setEditVal(cat); }}
+                              className="p-1.5 bg-gray-200 rounded hover:bg-gray-300 text-xs">✗</button>
+                          </>
+                        ) : (
+                          <>
+                            <Tag size={14} className="text-[#1A5276] shrink-0" />
+                            <span className="flex-1 text-sm font-medium text-gray-800">{cat}</span>
+                            <span className="text-xs text-gray-400 bg-white border px-2 py-0.5 rounded-full">{count} produit{count > 1 ? 's' : ''}</span>
+                            <button onClick={() => setEditing(true)}
+                              className="p-1.5 text-gray-400 hover:text-blue-600 transition" title="Renommer">
+                              <Edit2 size={13} />
+                            </button>
+                            <button onClick={() => handleDeleteCategory(cat)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 transition" title="Supprimer">
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
