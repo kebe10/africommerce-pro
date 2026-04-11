@@ -316,7 +316,7 @@ export default function ProductsPage() {
             const isOutOfStock = product.stock_quantity === 0;
             return (
               <div key={product.id} className={`bg-white rounded-xl shadow-sm border flex flex-col hover:shadow-md transition ${isOutOfStock ? 'border-red-400 border-2' : isLowStock ? 'border-orange-400 border-2' : 'border-gray-100'}`}>
-                <div className="h-52 bg-gray-100 relative flex items-center justify-center text-gray-400 group overflow-hidden rounded-t-xl">
+                <div className="h-40 sm:h-52 bg-gray-100 relative flex items-center justify-center text-gray-400 group overflow-hidden rounded-t-xl">
                   {product.photo_url ? (
                     // ✅ Image entière visible avec fond blanc
                     <img src={product.photo_url} alt={product.name} className="w-full h-full object-cover"
