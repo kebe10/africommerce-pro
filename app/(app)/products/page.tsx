@@ -7,8 +7,7 @@ import { formatMoney, calculateMargin } from '@/lib/utils';
 import {
   Plus, Minus, Edit2, Trash2, Package,
   Search, X, TrendingUp, AlertTriangle,
-  Lightbulb, BarChart2, Upload, Camera, Loader2,
-  Tag, ChevronDown
+  Lightbulb, BarChart2, Upload, Camera, Loader2, Tag
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -61,7 +60,60 @@ const STATUS_COLORS: Record<string, string> = {
   archived:     'bg-gray-100 text-gray-500',
 };
 
-// ── Composant ─────────────────────────────────────────────────────────────────
+// ── Sous-composant : ligne catégorie (CORRECTION : useState hors du .map()) ──
+
+type CategoryRowProps = {
+  cat: string;
+  count: number;
+  onRename: (oldName: string, newName: string) => Promise<void>;
+  onDelete: (name: string) => Promise<void>;
+};
+
+function CategoryRow({ cat, count, onRename, onDelete }: CategoryRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [editVal, setEditVal] = useState(cat);
+
+  return (
+    <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
+      {editing ? (
+        <>
+          <input
+            type="text" value={editVal}
+            onChange={e => setEditVal(e.target.value)}
+            className="flex-1 border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-[#1A5276]"
+            autoFocus
+          />
+          <button
+            onClick={async () => { await onRename(cat, editVal); setEditing(false); }}
+            className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
+          >✓</button>
+          <button
+            onClick={() => { setEditing(false); setEditVal(cat); }}
+            className="p-1.5 bg-gray-200 rounded hover:bg-gray-300 text-xs"
+          >✗</button>
+        </>
+      ) : (
+        <>
+          <Tag size={14} className="text-[#1A5276] shrink-0" />
+          <span className="flex-1 text-sm font-medium text-gray-800">{cat}</span>
+          <span className="text-xs text-gray-400 bg-white border px-2 py-0.5 rounded-full">
+            {count} produit{count > 1 ? 's' : ''}
+          </span>
+          <button onClick={() => setEditing(true)}
+            className="p-1.5 text-gray-400 hover:text-blue-600 transition" title="Renommer">
+            <Edit2 size={13} />
+          </button>
+          <button onClick={() => onDelete(cat)}
+            className="p-1.5 text-gray-400 hover:text-red-600 transition" title="Supprimer">
+            <Trash2 size={13} />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Composant principal ───────────────────────────────────────────────────────
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -70,17 +122,16 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
 
   // — UI
-  const [loading, setLoading]             = useState(true);
-  const [searchQuery, setSearchQuery]     = useState('');
-  const [statusFilter, setStatusFilter]   = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [isModalOpen, setIsModalOpen]     = useState(false);
+  const [loading, setLoading]                         = useState(true);
+  const [searchQuery, setSearchQuery]                 = useState('');
+  const [statusFilter, setStatusFilter]               = useState<string>('all');
+  const [categoryFilter, setCategoryFilter]           = useState<string>('all');
+  const [isModalOpen, setIsModalOpen]                 = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [isEditing, setIsEditing]         = useState(false);
-  const [editingId, setEditingId]         = useState<string | null>(null);
-  const [formData, setFormData]           = useState<FormData>(EMPTY_FORM);
-  const [newCategory, setNewCategory]     = useState('');
-  const [successMsg, setSuccessMsg]       = useState<string | null>(null);
+  const [isEditing, setIsEditing]                     = useState(false);
+  const [editingId, setEditingId]                     = useState<string | null>(null);
+  const [formData, setFormData]                       = useState<FormData>(EMPTY_FORM);
+  const [successMsg, setSuccessMsg]                   = useState<string | null>(null);
 
   // — Upload photo
   const fileInputRef                        = useRef<HTMLInputElement>(null);
@@ -105,18 +156,19 @@ export default function ProductsPage() {
 
   const stats = useMemo(() => ({
     total:      products.length,
+    active:     products.filter(p => p.status === 'active').length,
+    paused:     products.filter(p => p.status === 'paused').length,
+    // CORRECTION : rupture = stock_quantity === 0 OU status === 'out_of_stock'
+    outOfStock: products.filter(p => p.stock_quantity === 0 || p.status === 'out_of_stock').length,
+    archived:   products.filter(p => p.status === 'archived').length,
     lowStock:   products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold).length,
-    outOfStock: products.filter(p => p.stock_quantity === 0).length,
     totalValue: products.reduce((acc, p) => acc + (p.purchase_cost * p.stock_quantity), 0),
   }), [products]);
 
-  // ── Catégories extraites des produits ─────────────────────────────────────
+  // ── Catégories uniques ────────────────────────────────────────────────────
 
-  // CORRECTION : liste des catégories uniques extraites des produits
   const categories = useMemo(() => {
-    const cats = products
-      .map(p => p.category)
-      .filter(c => c && c.trim() !== '');
+    const cats = products.map(p => p.category).filter(c => c && c.trim() !== '');
     return [...new Set(cats)].sort();
   }, [products]);
 
@@ -124,16 +176,24 @@ export default function ProductsPage() {
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      // Filtre recherche texte
+      // Filtre texte
       const matchSearch = !searchQuery
         || p.name.toLowerCase().includes(searchQuery.toLowerCase())
         || (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase())
         || (p.category ?? '').toLowerCase().includes(searchQuery.toLowerCase());
 
-      // CORRECTION : filtre statut — comparaison stricte avec valeur réelle
-      const matchStatus = statusFilter === 'all' || p.status === statusFilter;
+      // CORRECTION filtre statut : "out_of_stock" = status OU stock = 0
+      let matchStatus = false;
+      if (statusFilter === 'all') {
+        matchStatus = true;
+      } else if (statusFilter === 'out_of_stock') {
+        // CORRECTION : inclure les produits avec stock = 0 même si statut != out_of_stock
+        matchStatus = p.status === 'out_of_stock' || p.stock_quantity === 0;
+      } else {
+        matchStatus = p.status === statusFilter;
+      }
 
-      // CORRECTION : filtre catégorie
+      // Filtre catégorie
       const matchCategory = categoryFilter === 'all'
         || (categoryFilter === 'none' && (!p.category || p.category.trim() === ''))
         || p.category === categoryFilter;
@@ -141,6 +201,13 @@ export default function ProductsPage() {
       return matchSearch && matchStatus && matchCategory;
     });
   }, [products, searchQuery, statusFilter, categoryFilter]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function showSuccess(msg: string) {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 3000);
+  }
 
   // ── Gestion photo ─────────────────────────────────────────────────────────
 
@@ -160,7 +227,7 @@ export default function ProductsPage() {
     const ext      = file.name.split('.').pop();
     const fileName = `product_${Date.now()}_${Math.random().toString(36).substring(2)}.${ext}`;
     const { error } = await supabase.storage.from('products').upload(fileName, file, { cacheControl: '3600', upsert: false });
-    if (error) { alert("Erreur upload photo : " + error.message); setUploadingPhoto(false); return null; }
+    if (error) { alert("Erreur upload : " + error.message); setUploadingPhoto(false); return null; }
     const { data } = supabase.storage.from('products').getPublicUrl(fileName);
     setUploadingPhoto(false);
     return data.publicUrl;
@@ -184,11 +251,6 @@ export default function ProductsPage() {
   };
 
   // ── Actions CRUD ──────────────────────────────────────────────────────────
-
-  function showSuccess(msg: string) {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(null), 3000);
-  }
 
   function openAddModal() {
     setFormData(EMPTY_FORM);
@@ -251,7 +313,8 @@ export default function ProductsPage() {
     else { setProducts(prev => prev.filter(p => p.id !== id)); showSuccess('Produit supprimé.'); }
   }
 
-  // CORRECTION : renommer une catégorie sur tous les produits concernés
+  // ── Gestion catégories ────────────────────────────────────────────────────
+
   async function handleRenameCategory(oldName: string, newName: string) {
     if (!newName.trim() || newName === oldName) return;
     const toUpdate = products.filter(p => p.category === oldName);
@@ -262,9 +325,8 @@ export default function ProductsPage() {
     showSuccess(`Catégorie "${oldName}" renommée en "${newName}"`);
   }
 
-  // CORRECTION : supprimer une catégorie (vide la catégorie des produits concernés)
   async function handleDeleteCategory(name: string) {
-    if (!confirm(`Supprimer la catégorie "${name}" ? Les produits ne seront pas supprimés, seulement leur catégorie sera vidée.`)) return;
+    if (!confirm(`Supprimer la catégorie "${name}" ? Les produits garderont leurs données, leur catégorie sera vidée.`)) return;
     const toUpdate = products.filter(p => p.category === name);
     for (const p of toUpdate) {
       await supabase.from('products').update({ category: '' }).eq('id', p.id);
@@ -280,7 +342,7 @@ export default function ProductsPage() {
 
       {/* Toast succès */}
       {successMsg && (
-        <div className="fixed top-4 right-4 z-[100] bg-green-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium">
+        <div className="fixed top-4 right-4 z-[100] bg-green-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium animate-pulse">
           <Package size={16} /> {successMsg}
         </div>
       )}
@@ -291,17 +353,22 @@ export default function ProductsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Catalogue Produits</h1>
           <p className="text-gray-500 text-sm">{products.length} produit{products.length > 1 ? 's' : ''}</p>
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
+        <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
+          <div className="relative flex-1 md:w-56">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input type="text" placeholder="Rechercher..."
               value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1A5276]" />
           </div>
-          {/* NOUVEAU : bouton Gérer les catégories */}
-          <button onClick={() => setIsCategoryModalOpen(true)}
-            className="flex items-center gap-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-3 py-2 rounded-lg text-sm transition whitespace-nowrap">
+          {/* Bouton catégories — CORRECTION : plus de useState dans .map() */}
+          <button
+            onClick={() => setIsCategoryModalOpen(true)}
+            className="flex items-center gap-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-3 py-2 rounded-lg text-sm transition whitespace-nowrap"
+          >
             <Tag size={15} /> Catégories
+            {categories.length > 0 && (
+              <span className="bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">{categories.length}</span>
+            )}
           </button>
           <button onClick={openAddModal}
             className="flex items-center gap-2 bg-[#1A5276] hover:bg-blue-900 text-white px-4 py-2 rounded-lg shadow-sm text-sm transition whitespace-nowrap">
@@ -334,19 +401,17 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* ── FILTRES CORRIGÉS ─────────────────────────────────────────────── */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-wrap gap-3 items-center">
-
-        {/* Filtre statut — CORRECTION : boutons clairs avec compteur */}
-        <div className="flex flex-wrap gap-1.5">
-          <span className="text-xs text-gray-400 font-medium self-center mr-1">Statut :</span>
+      {/* Filtres */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border space-y-3">
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <span className="text-xs text-gray-400 font-medium mr-1">Statut :</span>
           {([
-            { value: 'all',          label: `Tous (${products.length})` },
-            { value: 'active',       label: `Actifs (${products.filter(p => p.status === 'active').length})` },
-            { value: 'paused',       label: `En pause (${products.filter(p => p.status === 'paused').length})` },
-            { value: 'out_of_stock', label: `Rupture (${products.filter(p => p.status === 'out_of_stock').length})` },
-            { value: 'archived',     label: `Archivés (${products.filter(p => p.status === 'archived').length})` },
-          ] as const).map(({ value, label }) => (
+            { value: 'all',          label: `Tous (${stats.total})` },
+            { value: 'active',       label: `Actifs (${stats.active})` },
+            { value: 'paused',       label: `En pause (${stats.paused})` },
+            { value: 'out_of_stock', label: `Rupture (${stats.outOfStock})` },
+            { value: 'archived',     label: `Archivés (${stats.archived})` },
+          ]).map(({ value, label }) => (
             <button key={value} onClick={() => setStatusFilter(value)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition border ${
                 statusFilter === value
@@ -358,38 +423,38 @@ export default function ProductsPage() {
           ))}
         </div>
 
-        {/* CORRECTION : filtre catégorie */}
         {categories.length > 0 && (
-          <div className="flex items-center gap-2 border-l pl-3">
+          <div className="flex items-center gap-2 pt-2 border-t">
             <Tag size={14} className="text-gray-400 shrink-0" />
+            <span className="text-xs text-gray-400 font-medium">Catégorie :</span>
             <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
               className="border rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#1A5276]">
-              <option value="all">Toutes catégories</option>
-              <option value="none">Sans catégorie</option>
+              <option value="all">Toutes ({products.length})</option>
+              <option value="none">Sans catégorie ({products.filter(p => !p.category).length})</option>
               {categories.map(c => (
                 <option key={c} value={c}>{c} ({products.filter(p => p.category === c).length})</option>
               ))}
             </select>
+            {categoryFilter !== 'all' && (
+              <button onClick={() => setCategoryFilter('all')} className="text-xs text-red-400 hover:text-red-600">
+                <X size={14} />
+              </button>
+            )}
           </div>
         )}
 
-        {/* Bouton reset filtres */}
         {(statusFilter !== 'all' || categoryFilter !== 'all' || searchQuery) && (
-          <button
-            onClick={() => { setStatusFilter('all'); setCategoryFilter('all'); setSearchQuery(''); }}
-            className="text-xs text-red-500 hover:text-red-700 underline ml-auto"
-          >
-            Réinitialiser les filtres
-          </button>
+          <div className="flex items-center justify-between pt-1 border-t">
+            <p className="text-xs text-gray-400">
+              {filteredProducts.length} résultat{filteredProducts.length > 1 ? 's' : ''} sur {products.length} produits
+            </p>
+            <button onClick={() => { setStatusFilter('all'); setCategoryFilter('all'); setSearchQuery(''); }}
+              className="text-xs text-red-500 hover:text-red-700 underline">
+              Réinitialiser
+            </button>
+          </div>
         )}
       </div>
-
-      {/* Résultat filtrage */}
-      {(statusFilter !== 'all' || categoryFilter !== 'all' || searchQuery) && (
-        <p className="text-xs text-gray-400 -mt-3">
-          {filteredProducts.length} résultat{filteredProducts.length > 1 ? 's' : ''} sur {products.length} produits
-        </p>
-      )}
 
       {/* Grille produits */}
       {loading ? (
@@ -400,20 +465,20 @@ export default function ProductsPage() {
         <div className="py-16 text-center text-gray-400">
           <Package size={40} className="mx-auto mb-3 opacity-30" />
           <p className="text-sm font-medium">
-            {searchQuery ? `Aucun produit pour "${searchQuery}"` : 'Aucun produit dans cette catégorie'}
+            {searchQuery ? `Aucun produit pour "${searchQuery}"` : 'Aucun produit dans cette sélection'}
           </p>
           <button onClick={openAddModal} className="mt-4 text-sm text-[#1A5276] hover:underline">+ Ajouter un produit</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map(product => {
-            const margin = calculateMargin(product.purchase_cost, product.selling_price);
-            const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= product.low_stock_threshold;
-            const isOutOfStock = product.stock_quantity === 0;
+            const margin       = calculateMargin(product.purchase_cost, product.selling_price);
+            const isLowStock   = product.stock_quantity > 0 && product.stock_quantity <= product.low_stock_threshold;
+            const isOutOfStock = product.stock_quantity === 0 || product.status === 'out_of_stock';
             return (
               <div key={product.id} className={`bg-white rounded-xl shadow-sm border flex flex-col hover:shadow-md transition ${isOutOfStock ? 'border-red-400 border-2' : isLowStock ? 'border-orange-400 border-2' : 'border-gray-100'}`}>
 
-                {/* Image — CORRECTION : h-52 + object-cover pour image grande sans espace */}
+                {/* Image h-52 object-cover */}
                 <div className="h-52 bg-gray-100 relative flex items-center justify-center text-gray-400 group overflow-hidden rounded-t-xl">
                   {product.photo_url ? (
                     <img src={product.photo_url} alt={product.name}
@@ -431,7 +496,6 @@ export default function ProductsPage() {
                   </div>
                   {isOutOfStock && <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-1 rounded-full font-bold flex items-center gap-1"><X size={9} /> RUPTURE</div>}
                   {isLowStock && !isOutOfStock && <div className="absolute top-2 left-2 bg-orange-500 text-white text-[10px] px-2 py-1 rounded-full font-bold flex items-center gap-1"><AlertTriangle size={9} /> STOCK BAS</div>}
-                  {/* Badge catégorie */}
                   {product.category && (
                     <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
                       {product.category}
@@ -450,9 +514,9 @@ export default function ProductsPage() {
                     </span>
                   </div>
                   <div className="mb-3 text-sm space-y-1">
-                    <div className="flex justify-between items-center"><span className="text-gray-500">Achat</span><span className="font-medium text-red-600">{formatMoney(product.purchase_cost)}</span></div>
-                    <div className="flex justify-between items-center"><span className="text-gray-500">Vente</span><span className="font-bold text-green-700">{formatMoney(product.selling_price)}</span></div>
-                    <div className="flex justify-between items-center border-t pt-1">
+                    <div className="flex justify-between"><span className="text-gray-500">Achat</span><span className="font-medium text-red-600">{formatMoney(product.purchase_cost)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Vente</span><span className="font-bold text-green-700">{formatMoney(product.selling_price)}</span></div>
+                    <div className="flex justify-between border-t pt-1">
                       <span className="text-gray-500 flex items-center gap-1"><TrendingUp size={11} /> Marge brute</span>
                       <span className={`font-bold text-sm ${margin > 0 ? 'text-blue-600' : 'text-red-600'}`}>{margin.toFixed(1)}%</span>
                     </div>
@@ -478,7 +542,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* ── MODAL PRODUIT ────────────────────────────────────────────────── */}
+      {/* ── MODAL PRODUIT ─────────────────────────────────────────────────── */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -504,7 +568,6 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
-                  {/* CORRECTION : select + option saisie libre */}
                   <input type="text" value={formData.category}
                     onChange={e => setFormData({ ...formData, category: e.target.value })}
                     placeholder="Ex: Cosmétique"
@@ -514,7 +577,6 @@ export default function ProductsPage() {
                     {categories.map(c => <option key={c} value={c} />)}
                   </datalist>
                 </div>
-                {/* CORRECTION : champ statut dans le formulaire */}
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
                   <select value={formData.status}
@@ -604,7 +666,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* ── MODAL GESTION CATÉGORIES ─────────────────────────────────────── */}
+      {/* ── MODAL CATÉGORIES ─────────────────────────────────────────────── */}
       {isCategoryModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto">
@@ -616,43 +678,6 @@ export default function ProductsPage() {
               <button onClick={() => setIsCategoryModalOpen(false)} className="text-gray-300 hover:text-gray-500 transition"><X size={22} /></button>
             </div>
             <div className="p-6 space-y-4">
-
-              {/* Ajouter une nouvelle catégorie */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nouvelle catégorie</label>
-                <div className="flex gap-2">
-                  <input type="text" value={newCategory}
-                    onChange={e => setNewCategory(e.target.value)}
-                    placeholder="Ex: Électronique"
-                    className="flex-1 border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-[#1A5276]"
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (newCategory.trim() && !categories.includes(newCategory.trim())) {
-                          setFormData(prev => ({ ...prev, category: newCategory.trim() }));
-                          setNewCategory('');
-                          showSuccess(`Catégorie "${newCategory.trim()}" prête à être utilisée lors du prochain ajout de produit.`);
-                        }
-                      }
-                    }}
-                  />
-                  <button type="button"
-                    onClick={() => {
-                      if (newCategory.trim()) {
-                        setNewCategory('');
-                        showSuccess(`Catégorie "${newCategory.trim()}" ajoutée. Elle apparaîtra quand vous créerez un produit avec cette catégorie.`);
-                      }
-                    }}
-                    className="px-4 py-2 bg-[#1A5276] text-white rounded-lg text-sm hover:bg-blue-900 transition">
-                    <Plus size={16} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  Les catégories sont créées en les assignant à un produit.
-                </p>
-              </div>
-
-              {/* Liste des catégories existantes */}
               {categories.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <Tag size={32} className="mx-auto mb-2 opacity-30" />
@@ -661,44 +686,23 @@ export default function ProductsPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-gray-700">Catégories existantes</p>
-                  {categories.map(cat => {
-                    const count = products.filter(p => p.category === cat).length;
-                    const [editing, setEditing] = useState(false);
-                    const [editVal, setEditVal] = useState(cat);
-                    return (
-                      <div key={cat} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
-                        {editing ? (
-                          <>
-                            <input type="text" value={editVal} onChange={e => setEditVal(e.target.value)}
-                              className="flex-1 border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-[#1A5276]" autoFocus />
-                            <button onClick={async () => {
-                              await handleRenameCategory(cat, editVal);
-                              setEditing(false);
-                            }} className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 text-xs">✓</button>
-                            <button onClick={() => { setEditing(false); setEditVal(cat); }}
-                              className="p-1.5 bg-gray-200 rounded hover:bg-gray-300 text-xs">✗</button>
-                          </>
-                        ) : (
-                          <>
-                            <Tag size={14} className="text-[#1A5276] shrink-0" />
-                            <span className="flex-1 text-sm font-medium text-gray-800">{cat}</span>
-                            <span className="text-xs text-gray-400 bg-white border px-2 py-0.5 rounded-full">{count} produit{count > 1 ? 's' : ''}</span>
-                            <button onClick={() => setEditing(true)}
-                              className="p-1.5 text-gray-400 hover:text-blue-600 transition" title="Renommer">
-                              <Edit2 size={13} />
-                            </button>
-                            <button onClick={() => handleDeleteCategory(cat)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 transition" title="Supprimer">
-                              <Trash2 size={13} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {/* CORRECTION : CategoryRow est un composant séparé — useState autorisé */}
+                  {categories.map(cat => (
+                    <CategoryRow
+                      key={cat}
+                      cat={cat}
+                      count={products.filter(p => p.category === cat).length}
+                      onRename={handleRenameCategory}
+                      onDelete={handleDeleteCategory}
+                    />
+                  ))}
                 </div>
               )}
+              <div className="pt-2 border-t">
+                <p className="text-xs text-gray-400 text-center">
+                  Pour ajouter une catégorie, créez ou modifiez un produit et renseignez le champ "Catégorie".
+                </p>
+              </div>
             </div>
           </div>
         </div>
