@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { formatMoney, calculateMargin } from '@/lib/utils';
 import {
-  Plus, Minus, Edit2, Trash2, Package,
+  Plus, Edit2, Trash2, Package,
   Search, X, TrendingUp, AlertTriangle,
   Lightbulb, BarChart2, Upload, Camera, Loader2, Tag
 } from 'lucide-react';
@@ -60,7 +60,7 @@ const STATUS_COLORS: Record<string, string> = {
   archived:     'bg-gray-100 text-gray-500',
 };
 
-// ── Sous-composant : ligne catégorie (CORRECTION : useState hors du .map()) ──
+// ── Sous-composant : ligne catégorie ──────────────────────────────────────────
 
 type CategoryRowProps = {
   cat: string;
@@ -72,25 +72,16 @@ type CategoryRowProps = {
 function CategoryRow({ cat, count, onRename, onDelete }: CategoryRowProps) {
   const [editing, setEditing] = useState(false);
   const [editVal, setEditVal] = useState(cat);
-
   return (
     <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
       {editing ? (
         <>
-          <input
-            type="text" value={editVal}
-            onChange={e => setEditVal(e.target.value)}
-            className="flex-1 border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-[#1A5276]"
-            autoFocus
-          />
-          <button
-            onClick={async () => { await onRename(cat, editVal); setEditing(false); }}
-            className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
-          >✓</button>
-          <button
-            onClick={() => { setEditing(false); setEditVal(cat); }}
-            className="p-1.5 bg-gray-200 rounded hover:bg-gray-300 text-xs"
-          >✗</button>
+          <input type="text" value={editVal} onChange={e => setEditVal(e.target.value)}
+            className="flex-1 border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-[#1A5276]" autoFocus />
+          <button onClick={async () => { await onRename(cat, editVal); setEditing(false); }}
+            className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 text-xs">✓</button>
+          <button onClick={() => { setEditing(false); setEditVal(cat); }}
+            className="p-1.5 bg-gray-200 rounded hover:bg-gray-300 text-xs">✗</button>
         </>
       ) : (
         <>
@@ -99,16 +90,79 @@ function CategoryRow({ cat, count, onRename, onDelete }: CategoryRowProps) {
           <span className="text-xs text-gray-400 bg-white border px-2 py-0.5 rounded-full">
             {count} produit{count > 1 ? 's' : ''}
           </span>
-          <button onClick={() => setEditing(true)}
-            className="p-1.5 text-gray-400 hover:text-blue-600 transition" title="Renommer">
-            <Edit2 size={13} />
-          </button>
-          <button onClick={() => onDelete(cat)}
-            className="p-1.5 text-gray-400 hover:text-red-600 transition" title="Supprimer">
-            <Trash2 size={13} />
-          </button>
+          <button onClick={() => setEditing(true)} className="p-1.5 text-gray-400 hover:text-blue-600 transition"><Edit2 size={13} /></button>
+          <button onClick={() => onDelete(cat)} className="p-1.5 text-gray-400 hover:text-red-600 transition"><Trash2 size={13} /></button>
         </>
       )}
+    </div>
+  );
+}
+
+// ── Sous-composant : contrôle stock éditable ──────────────────────────────────
+
+type StockControlProps = {
+  productId: string;
+  quantity: number;
+  isOutOfStock: boolean;
+  isLowStock: boolean;
+  onUpdate: (id: string, newQty: number) => Promise<void>;
+};
+
+function StockControl({ productId, quantity, isOutOfStock, isLowStock, onUpdate }: StockControlProps) {
+  const [editing, setEditing]   = useState(false);
+  const [inputVal, setInputVal] = useState(String(quantity));
+
+  // Sync si la quantité change depuis l'extérieur
+  useEffect(() => { setInputVal(String(quantity)); }, [quantity]);
+
+  function handleConfirm() {
+    const parsed = parseInt(inputVal, 10);
+    if (!isNaN(parsed) && parsed >= 0 && parsed !== quantity) {
+      onUpdate(productId, parsed);
+    } else {
+      setInputVal(String(quantity)); // reset si invalide
+    }
+    setEditing(false);
+  }
+
+  const colorClass = isOutOfStock
+    ? 'text-red-600'
+    : isLowStock
+      ? 'text-orange-600'
+      : 'text-gray-800';
+
+  return (
+    <div className="mt-auto bg-gray-50 -mx-4 -mb-4 p-3 border-t rounded-b-xl flex items-center justify-between">
+      <span className="text-xs font-medium text-gray-600">Stock</span>
+      <div className="flex items-center gap-2">
+        {/* AMÉLIORATION : champ éditable au clic sur le chiffre */}
+        {editing ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="number" min="0"
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+              onBlur={handleConfirm}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleConfirm();
+                if (e.key === 'Escape') { setInputVal(String(quantity)); setEditing(false); }
+              }}
+              className="w-16 border rounded px-1.5 py-0.5 text-sm text-center focus:ring-2 focus:ring-[#1A5276] font-bold"
+              autoFocus
+            />
+            <button onClick={handleConfirm}
+              className="text-xs bg-green-500 text-white px-2 py-0.5 rounded hover:bg-green-600">✓</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setEditing(true)}
+            title="Cliquer pour modifier le stock"
+            className={`font-bold w-10 text-center text-sm ${colorClass} hover:bg-gray-200 rounded px-1 py-0.5 transition cursor-pointer border border-transparent hover:border-gray-300`}
+          >
+            {quantity}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -118,22 +172,18 @@ function CategoryRow({ cat, count, onRename, onDelete }: CategoryRowProps) {
 export default function ProductsPage() {
   const router = useRouter();
 
-  // — Données
-  const [products, setProducts] = useState<Product[]>([]);
-
-  // — UI
-  const [loading, setLoading]                         = useState(true);
-  const [searchQuery, setSearchQuery]                 = useState('');
-  const [statusFilter, setStatusFilter]               = useState<string>('all');
-  const [categoryFilter, setCategoryFilter]           = useState<string>('all');
-  const [isModalOpen, setIsModalOpen]                 = useState(false);
+  const [products, setProducts]   = useState<Product[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [statusFilter, setStatusFilter]   = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [isModalOpen, setIsModalOpen]       = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [isEditing, setIsEditing]                     = useState(false);
-  const [editingId, setEditingId]                     = useState<string | null>(null);
-  const [formData, setFormData]                       = useState<FormData>(EMPTY_FORM);
-  const [successMsg, setSuccessMsg]                   = useState<string | null>(null);
+  const [isEditing, setIsEditing]   = useState(false);
+  const [editingId, setEditingId]   = useState<string | null>(null);
+  const [formData, setFormData]     = useState<FormData>(EMPTY_FORM);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // — Upload photo
   const fileInputRef                        = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview]     = useState<string | null>(null);
   const [photoFile, setPhotoFile]           = useState<File | null>(null);
@@ -158,42 +208,33 @@ export default function ProductsPage() {
     total:      products.length,
     active:     products.filter(p => p.status === 'active').length,
     paused:     products.filter(p => p.status === 'paused').length,
-    // CORRECTION : rupture = stock_quantity === 0 OU status === 'out_of_stock'
     outOfStock: products.filter(p => p.stock_quantity === 0 || p.status === 'out_of_stock').length,
     archived:   products.filter(p => p.status === 'archived').length,
     lowStock:   products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold).length,
     totalValue: products.reduce((acc, p) => acc + (p.purchase_cost * p.stock_quantity), 0),
   }), [products]);
 
-  // ── Catégories uniques ────────────────────────────────────────────────────
+  // ── Catégories ────────────────────────────────────────────────────────────
 
   const categories = useMemo(() => {
     const cats = products.map(p => p.category).filter(c => c && c.trim() !== '');
     return [...new Set(cats)].sort();
   }, [products]);
 
-  // ── Filtrage CORRIGÉ ──────────────────────────────────────────────────────
+  // ── Filtrage ──────────────────────────────────────────────────────────────
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      // Filtre texte
       const matchSearch = !searchQuery
         || p.name.toLowerCase().includes(searchQuery.toLowerCase())
         || (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase())
         || (p.category ?? '').toLowerCase().includes(searchQuery.toLowerCase());
 
-      // CORRECTION filtre statut : "out_of_stock" = status OU stock = 0
       let matchStatus = false;
-      if (statusFilter === 'all') {
-        matchStatus = true;
-      } else if (statusFilter === 'out_of_stock') {
-        // CORRECTION : inclure les produits avec stock = 0 même si statut != out_of_stock
-        matchStatus = p.status === 'out_of_stock' || p.stock_quantity === 0;
-      } else {
-        matchStatus = p.status === statusFilter;
-      }
+      if (statusFilter === 'all') matchStatus = true;
+      else if (statusFilter === 'out_of_stock') matchStatus = p.status === 'out_of_stock' || p.stock_quantity === 0;
+      else matchStatus = p.status === statusFilter;
 
-      // Filtre catégorie
       const matchCategory = categoryFilter === 'all'
         || (categoryFilter === 'none' && (!p.category || p.category.trim() === ''))
         || p.category === categoryFilter;
@@ -242,12 +283,14 @@ export default function ProductsPage() {
 
   // ── Actions stock ─────────────────────────────────────────────────────────
 
+  // AMÉLIORATION : mise à jour directe par saisie
   const updateStock = async (id: string, newQuantity: number) => {
     if (newQuantity < 0) return;
     const previous = products;
     setProducts(prev => prev.map(p => p.id === id ? { ...p, stock_quantity: newQuantity } : p));
     const { error } = await supabase.from('products').update({ stock_quantity: newQuantity }).eq('id', id);
     if (error) { console.error('Stock:', error.message); setProducts(previous); }
+    else showSuccess(`Stock mis à jour : ${newQuantity} unités`);
   };
 
   // ── Actions CRUD ──────────────────────────────────────────────────────────
@@ -280,14 +323,12 @@ export default function ProductsPage() {
     e.preventDefault();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { alert('Vous devez être connecté'); return; }
-
     let finalPhotoUrl = formData.photo_url;
     if (photoFile) {
       const url = await uploadPhoto(photoFile);
       if (!url) return;
       finalPhotoUrl = url;
     }
-
     const dataToSave = { ...formData, photo_url: finalPhotoUrl };
     let error;
     if (isEditing && editingId) {
@@ -295,7 +336,6 @@ export default function ProductsPage() {
     } else {
       ({ error } = await supabase.from('products').insert([{ ...dataToSave, user_id: user.id }]));
     }
-
     if (error) alert('Erreur : ' + error.message);
     else {
       setIsModalOpen(false);
@@ -326,7 +366,7 @@ export default function ProductsPage() {
   }
 
   async function handleDeleteCategory(name: string) {
-    if (!confirm(`Supprimer la catégorie "${name}" ? Les produits garderont leurs données, leur catégorie sera vidée.`)) return;
+    if (!confirm(`Supprimer la catégorie "${name}" ?`)) return;
     const toUpdate = products.filter(p => p.category === name);
     for (const p of toUpdate) {
       await supabase.from('products').update({ category: '' }).eq('id', p.id);
@@ -340,7 +380,7 @@ export default function ProductsPage() {
   return (
     <div className="space-y-6">
 
-      {/* Toast succès */}
+      {/* Toast */}
       {successMsg && (
         <div className="fixed top-4 right-4 z-[100] bg-green-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium animate-pulse">
           <Package size={16} /> {successMsg}
@@ -360,11 +400,8 @@ export default function ProductsPage() {
               value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1A5276]" />
           </div>
-          {/* Bouton catégories — CORRECTION : plus de useState dans .map() */}
-          <button
-            onClick={() => setIsCategoryModalOpen(true)}
-            className="flex items-center gap-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-3 py-2 rounded-lg text-sm transition whitespace-nowrap"
-          >
+          <button onClick={() => setIsCategoryModalOpen(true)}
+            className="flex items-center gap-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-3 py-2 rounded-lg text-sm transition whitespace-nowrap">
             <Tag size={15} /> Catégories
             {categories.length > 0 && (
               <span className="bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">{categories.length}</span>
@@ -436,9 +473,7 @@ export default function ProductsPage() {
               ))}
             </select>
             {categoryFilter !== 'all' && (
-              <button onClick={() => setCategoryFilter('all')} className="text-xs text-red-400 hover:text-red-600">
-                <X size={14} />
-              </button>
+              <button onClick={() => setCategoryFilter('all')} className="text-xs text-red-400 hover:text-red-600"><X size={14} /></button>
             )}
           </div>
         )}
@@ -449,9 +484,7 @@ export default function ProductsPage() {
               {filteredProducts.length} résultat{filteredProducts.length > 1 ? 's' : ''} sur {products.length} produits
             </p>
             <button onClick={() => { setStatusFilter('all'); setCategoryFilter('all'); setSearchQuery(''); }}
-              className="text-xs text-red-500 hover:text-red-700 underline">
-              Réinitialiser
-            </button>
+              className="text-xs text-red-500 hover:text-red-700 underline">Réinitialiser</button>
           </div>
         )}
       </div>
@@ -464,9 +497,7 @@ export default function ProductsPage() {
       ) : filteredProducts.length === 0 ? (
         <div className="py-16 text-center text-gray-400">
           <Package size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-medium">
-            {searchQuery ? `Aucun produit pour "${searchQuery}"` : 'Aucun produit dans cette sélection'}
-          </p>
+          <p className="text-sm font-medium">{searchQuery ? `Aucun produit pour "${searchQuery}"` : 'Aucun produit dans cette sélection'}</p>
           <button onClick={openAddModal} className="mt-4 text-sm text-[#1A5276] hover:underline">+ Ajouter un produit</button>
         </div>
       ) : (
@@ -478,11 +509,10 @@ export default function ProductsPage() {
             return (
               <div key={product.id} className={`bg-white rounded-xl shadow-sm border flex flex-col hover:shadow-md transition ${isOutOfStock ? 'border-red-400 border-2' : isLowStock ? 'border-orange-400 border-2' : 'border-gray-100'}`}>
 
-                {/* Image h-52 object-cover */}
+                {/* Image */}
                 <div className="h-52 bg-gray-100 relative flex items-center justify-center text-gray-400 group overflow-hidden rounded-t-xl">
                   {product.photo_url ? (
-                    <img src={product.photo_url} alt={product.name}
-                      className="w-full h-full object-cover"
+                    <img src={product.photo_url} alt={product.name} className="w-full h-full object-cover"
                       onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
                     <div className="flex flex-col items-center gap-2 opacity-40">
@@ -497,9 +527,7 @@ export default function ProductsPage() {
                   {isOutOfStock && <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-1 rounded-full font-bold flex items-center gap-1"><X size={9} /> RUPTURE</div>}
                   {isLowStock && !isOutOfStock && <div className="absolute top-2 left-2 bg-orange-500 text-white text-[10px] px-2 py-1 rounded-full font-bold flex items-center gap-1"><AlertTriangle size={9} /> STOCK BAS</div>}
                   {product.category && (
-                    <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
-                      {product.category}
-                    </div>
+                    <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">{product.category}</div>
                   )}
                 </div>
 
@@ -513,6 +541,7 @@ export default function ProductsPage() {
                       {STATUS_LABELS[product.status] ?? product.status}
                     </span>
                   </div>
+
                   <div className="mb-3 text-sm space-y-1">
                     <div className="flex justify-between"><span className="text-gray-500">Achat</span><span className="font-medium text-red-600">{formatMoney(product.purchase_cost)}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Vente</span><span className="font-bold text-green-700">{formatMoney(product.selling_price)}</span></div>
@@ -521,20 +550,23 @@ export default function ProductsPage() {
                       <span className={`font-bold text-sm ${margin > 0 ? 'text-blue-600' : 'text-red-600'}`}>{margin.toFixed(1)}%</span>
                     </div>
                   </div>
-                  <button onClick={() => router.push(`/calculator?product=${product.id}`)}
-                    className="mb-3 w-full text-xs text-purple-600 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg py-1.5 flex items-center justify-center gap-1 transition">
-                    <Lightbulb size={12} /> Calculer marge réelle
+
+                  {/* AMÉLIORATION : bouton orange bien visible */}
+                  <button
+                    onClick={() => router.push(`/calculator?product=${product.id}`)}
+                    className="mb-3 w-full text-xs text-white bg-[#E67E22] hover:bg-orange-600 rounded-lg py-2 flex items-center justify-center gap-1.5 transition font-semibold shadow-sm"
+                  >
+                    <Lightbulb size={13} /> Calculer marge réelle
                   </button>
-                  <div className="mt-auto bg-gray-50 -mx-4 -mb-4 p-3 border-t rounded-b-xl flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-600">Stock</span>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => updateStock(product.id, product.stock_quantity - 1)} disabled={product.stock_quantity === 0}
-                        className="w-7 h-7 rounded-full bg-white border flex items-center justify-center text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"><Minus size={13} /></button>
-                      <span className={`font-bold w-8 text-center text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-800'}`}>{product.stock_quantity}</span>
-                      <button onClick={() => updateStock(product.id, product.stock_quantity + 1)}
-                        className="w-7 h-7 rounded-full bg-white border flex items-center justify-center text-gray-500 hover:bg-gray-100 transition"><Plus size={13} /></button>
-                    </div>
-                  </div>
+
+                  {/* AMÉLIORATION : stock éditable au clic */}
+                  <StockControl
+                    productId={product.id}
+                    quantity={product.stock_quantity}
+                    isOutOfStock={isOutOfStock}
+                    isLowStock={isLowStock}
+                    onUpdate={updateStock}
+                  />
                 </div>
               </div>
             );
@@ -686,7 +718,6 @@ export default function ProductsPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {/* CORRECTION : CategoryRow est un composant séparé — useState autorisé */}
                   {categories.map(cat => (
                     <CategoryRow
                       key={cat}
