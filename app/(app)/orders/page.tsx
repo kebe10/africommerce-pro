@@ -24,7 +24,7 @@ type Order = {
   customer_name: string;
   customer_phone: string;
   customer_city: string;
-  customer_address: string | null; // NOUVEAU
+  customer_address: string | null;
   product_id: string;
   quantity: number;
   unit_price: number;
@@ -42,7 +42,7 @@ type NewOrderForm = {
   customer_name: string;
   customer_phone: string;
   customer_city: string;
-  customer_address: string; // NOUVEAU
+  customer_address: string;
   product_id: string;
   quantity: number;
   source: string;
@@ -59,7 +59,7 @@ const EMPTY_ORDER: NewOrderForm = {
   customer_name:    '',
   customer_phone:   '',
   customer_city:    '',
-  customer_address: '', // NOUVEAU
+  customer_address: '',
   product_id:       '',
   quantity:         1,
   source:           'whatsapp',
@@ -104,6 +104,11 @@ const SOURCE_LABELS: Record<string, string> = {
   phone:     '📞 Téléphone',
 };
 
+// Statuts qui déduisent le stock
+const STOCK_DEDUCT_STATUS  = 'delivered';
+// Statuts qui remettent le stock
+const STOCK_RESTORE_STATUSES = ['failed', 'returned'];
+
 // ── Composant ─────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
@@ -115,6 +120,7 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen]   = useState(false);
   const [newOrder, setNewOrder]         = useState<NewOrderForm>(EMPTY_ORDER);
+  const [successMsg, setSuccessMsg]     = useState<string | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -145,6 +151,13 @@ export default function OrdersPage() {
     else if (data) setOrders(data as Order[]);
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function showSuccess(msg: string) {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 4000);
+  }
+
   // ── Filtrage ──────────────────────────────────────────────────────────────
 
   const filteredOrders = useMemo(() => {
@@ -164,25 +177,99 @@ export default function OrdersPage() {
     const pending   = filteredOrders.filter(o => ['new', 'confirmed', 'shipped'].includes(o.status));
     const failed    = filteredOrders.filter(o => ['failed', 'returned'].includes(o.status));
     const revenue   = delivered.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
-    return {
-      total:   filteredOrders.length,
-      revenue,
-      pending: pending.length,
-      failed:  failed.length,
-    };
+    return { total: filteredOrders.length, revenue, pending: pending.length, failed: failed.length };
   }, [filteredOrders]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  // ── Gestion stock automatique ─────────────────────────────────────────────
 
-  const updateOrderStatus = async (id: string, status: string) => {
+  /**
+   * Met à jour le stock du produit selon le changement de statut :
+   * - ancienStatut → "livrée"   : déduire la quantité
+   * - ancienStatut → "échouée/retournée" ET ancienStatut était "livrée" : remettre la quantité
+   * - "livrée" → "échouée/retournée" : remettre la quantité
+   */
+  async function handleStockForStatusChange(
+    order: Order,
+    oldStatus: string,
+    newStatus: string
+  ) {
+    // Récupérer le stock actuel du produit
+    const { data: productData, error } = await supabase
+      .from('products')
+      .select('stock_quantity')
+      .eq('id', order.product_id)
+      .maybeSingle();
+
+    if (error || !productData) {
+      console.error('Stock produit introuvable:', error?.message);
+      return;
+    }
+
+    const currentStock = productData.stock_quantity;
+    let newStock: number | null = null;
+    let stockMessage: string | null = null;
+
+    // CAS 1 : passage à "Livrée" depuis n'importe quel autre statut
+    if (newStatus === STOCK_DEDUCT_STATUS && oldStatus !== STOCK_DEDUCT_STATUS) {
+      newStock = Math.max(0, currentStock - order.quantity);
+      stockMessage = `Stock déduit : -${order.quantity} unité${order.quantity > 1 ? 's' : ''}`;
+    }
+
+    // CAS 2 : passage de "Livrée" vers "Échouée" ou "Retournée" → remettre le stock
+    else if (
+      oldStatus === STOCK_DEDUCT_STATUS &&
+      STOCK_RESTORE_STATUSES.includes(newStatus)
+    ) {
+      newStock = currentStock + order.quantity;
+      stockMessage = `Stock remis : +${order.quantity} unité${order.quantity > 1 ? 's' : ''}`;
+    }
+
+    // Mettre à jour le stock si nécessaire
+    if (newStock !== null) {
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ stock_quantity: newStock })
+        .eq('id', order.product_id);
+
+      if (updateError) {
+        console.error('Mise à jour stock:', updateError.message);
+      } else {
+        // Mettre à jour le produit localement aussi
+        setProducts(prev => prev.map(p =>
+          p.id === order.product_id ? { ...p, stock_quantity: newStock! } : p
+        ));
+        if (stockMessage) showSuccess(stockMessage);
+      }
+    }
+  }
+
+  // ── Changement de statut ──────────────────────────────────────────────────
+
+  const updateOrderStatus = async (order: Order, newStatus: string) => {
+    const oldStatus = order.status;
+    if (oldStatus === newStatus) return;
+
+    // Mise à jour optimiste
     const previous = orders;
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-    const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: newStatus } : o));
+
+    // Sauvegarder en base
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', order.id);
+
     if (error) {
       console.error('Statut:', error.message);
-      setOrders(previous);
+      setOrders(previous); // rollback
+      return;
     }
+
+    // Gérer le stock selon le changement de statut
+    await handleStockForStatusChange(order, oldStatus, newStatus);
   };
+
+  // ── Création commande ─────────────────────────────────────────────────────
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,49 +284,53 @@ export default function OrdersPage() {
     const { error } = await supabase.from('orders').insert({
       ...newOrder,
       failure_reason:   newOrder.failure_reason || null,
-      customer_address: newOrder.customer_address || null, // NOUVEAU
+      customer_address: newOrder.customer_address || null,
       unit_price:       product.selling_price,
       total_amount:     total,
       user_id:          user.id,
     });
 
-    if (error) alert('Erreur lors de la création : ' + error.message);
-    else {
-      setIsModalOpen(false);
-      setNewOrder(EMPTY_ORDER);
-      await fetchOrders();
+    if (error) {
+      alert('Erreur lors de la création : ' + error.message);
+      return;
     }
+
+    // Si la commande est créée directement en "Livrée", déduire le stock
+    if (newOrder.status === STOCK_DEDUCT_STATUS) {
+      const newStock = Math.max(0, product.stock_quantity - newOrder.quantity);
+      await supabase.from('products').update({ stock_quantity: newStock }).eq('id', product.id);
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, stock_quantity: newStock } : p));
+      showSuccess(`Commande créée · Stock déduit : -${newOrder.quantity} unité${newOrder.quantity > 1 ? 's' : ''}`);
+    } else {
+      showSuccess('Commande créée avec succès !');
+    }
+
+    setIsModalOpen(false);
+    setNewOrder(EMPTY_ORDER);
+    await fetchOrders();
   };
 
   // ── Export CSV ────────────────────────────────────────────────────────────
 
   const exportToCSV = () => {
     if (filteredOrders.length === 0) { alert('Aucune donnée à exporter.'); return; }
-
     const headers = [
-      'N° Commande', 'Client', 'Téléphone', 'Ville', 'Adresse / Quartier', // NOUVEAU
+      'N° Commande', 'Client', 'Téléphone', 'Ville', 'Adresse / Quartier',
       'Produit', 'Qté', 'Montant', 'Source', 'Statut', 'Motif échec',
       'Transporteur', 'Frais livraison', 'Coût pub', 'Date',
     ];
-
     const rows = filteredOrders.map(o => [
       o.order_number || '',
-      o.customer_name,
-      o.customer_phone,
-      o.customer_city,
-      o.customer_address || '', // NOUVEAU
+      o.customer_name, o.customer_phone, o.customer_city,
+      o.customer_address || '',
       o.products?.name || 'N/A',
-      o.quantity,
-      o.total_amount,
+      o.quantity, o.total_amount,
       SOURCE_LABELS[o.source] ?? o.source,
       STATUS_LABELS[o.status] ?? o.status,
       o.failure_reason ? (FAILURE_LABELS[o.failure_reason] ?? o.failure_reason) : '',
-      o.carrier || '',
-      o.delivery_cost ?? 0,
-      o.ad_cost_per_order ?? 0,
+      o.carrier || '', o.delivery_cost ?? 0, o.ad_cost_per_order ?? 0,
       new Date(o.created_at).toLocaleDateString('fr-FR'),
     ]);
-
     const csv  = '\uFEFF' + headers.join(';') + '\n' + rows.map(r => r.join(';')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -252,6 +343,13 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
+
+      {/* Toast */}
+      {successMsg && (
+        <div className="fixed top-4 right-4 z-[100] bg-green-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium">
+          <CheckCircle size={16} /> {successMsg}
+        </div>
+      )}
 
       {/* En-tête */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -268,6 +366,16 @@ export default function OrdersPage() {
             className="flex items-center gap-2 bg-[#E67E22] hover:bg-orange-600 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium transition">
             <Plus size={16} /> Nouvelle Commande
           </button>
+        </div>
+      </div>
+
+      {/* Encart info stock */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3 text-sm">
+        <Truck size={18} className="text-blue-500 shrink-0 mt-0.5" />
+        <div className="text-blue-700">
+          <span className="font-semibold">Gestion automatique du stock :</span>
+          {' '}le stock est déduit quand une commande passe en <strong>"Livrée"</strong>,
+          et remis si elle passe en <strong>"Échouée"</strong> ou <strong>"Retournée"</strong>.
         </div>
       </div>
 
@@ -352,11 +460,8 @@ export default function OrdersPage() {
                         {order.customer_phone}
                         {order.customer_city && ` · ${order.customer_city}`}
                       </div>
-                      {/* NOUVEAU : afficher l'adresse si renseignée */}
                       {order.customer_address && (
-                        <div className="text-xs text-gray-400 mt-0.5 italic">
-                          📍 {order.customer_address}
-                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5 italic">📍 {order.customer_address}</div>
                       )}
                     </td>
                     <td className="p-4">
@@ -367,14 +472,22 @@ export default function OrdersPage() {
                     <td className="p-4 text-right font-medium">{formatMoney(order.total_amount)}</td>
                     <td className="p-4">
                       <div className="space-y-1">
-                        <select value={order.status} onChange={e => updateOrderStatus(order.id, e.target.value)}
-                          className={`text-xs border rounded-lg px-2 py-1 cursor-pointer focus:outline-none w-full ${STATUS_COLORS[order.status] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                        {/* CORRECTION : on passe l'objet order complet pour gérer le stock */}
+                        <select
+                          value={order.status}
+                          onChange={e => updateOrderStatus(order, e.target.value)}
+                          className={`text-xs border rounded-lg px-2 py-1 cursor-pointer focus:outline-none w-full ${
+                            STATUS_COLORS[order.status] ?? 'bg-gray-100 text-gray-700 border-gray-200'
+                          }`}
+                        >
                           {Object.entries(STATUS_LABELS).map(([value, label]) => (
                             <option key={value} value={value}>{label}</option>
                           ))}
                         </select>
                         {order.failure_reason && (
-                          <span className="text-xs text-red-500 block">{FAILURE_LABELS[order.failure_reason] ?? order.failure_reason}</span>
+                          <span className="text-xs text-red-500 block">
+                            {FAILURE_LABELS[order.failure_reason] ?? order.failure_reason}
+                          </span>
                         )}
                       </div>
                     </td>
@@ -402,11 +515,9 @@ export default function OrdersPage() {
               <h2 className="text-xl font-bold">Nouvelle Commande</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-300 hover:text-gray-500 transition"><X size={22} /></button>
             </div>
-
             <form onSubmit={handleCreateOrder} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
 
-                {/* Nom */}
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nom du client *</label>
                   <input type="text" required value={newOrder.customer_name}
@@ -415,7 +526,6 @@ export default function OrdersPage() {
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
 
-                {/* Téléphone */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone *</label>
                   <input type="tel" required value={newOrder.customer_phone}
@@ -424,7 +534,6 @@ export default function OrdersPage() {
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
 
-                {/* Ville */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
                   <input type="text" value={newOrder.customer_city}
@@ -433,7 +542,6 @@ export default function OrdersPage() {
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
 
-                {/* NOUVEAU : Adresse / Quartier */}
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Adresse / Quartier
@@ -443,12 +551,8 @@ export default function OrdersPage() {
                     onChange={e => setNewOrder({ ...newOrder, customer_address: e.target.value })}
                     placeholder="Ex: Cocody Riviera 3, en face du supermarché"
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Utile pour les livraisons longue distance ou hors ville.
-                  </p>
                 </div>
 
-                {/* Produit */}
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Produit *</label>
                   <select required value={newOrder.product_id}
@@ -463,7 +567,6 @@ export default function OrdersPage() {
                   </select>
                 </div>
 
-                {/* Quantité */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Quantité *</label>
                   <input type="number" min="1" required value={newOrder.quantity}
@@ -471,7 +574,6 @@ export default function OrdersPage() {
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
 
-                {/* Source */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
                   <select value={newOrder.source}
@@ -483,7 +585,6 @@ export default function OrdersPage() {
                   </select>
                 </div>
 
-                {/* Statut */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
                   <select value={newOrder.status}
@@ -493,9 +594,14 @@ export default function OrdersPage() {
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
+                  {/* Avertissement si statut = Livrée dès la création */}
+                  {newOrder.status === 'delivered' && newOrder.product_id && (
+                    <p className="text-xs text-orange-600 mt-1 bg-orange-50 px-2 py-1 rounded">
+                      ⚠️ Le stock sera déduit automatiquement à la sauvegarde.
+                    </p>
+                  )}
                 </div>
 
-                {/* Motif échec conditionnel */}
                 {(newOrder.status === 'failed' || newOrder.status === 'returned') && (
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Motif d'échec</label>
@@ -510,7 +616,6 @@ export default function OrdersPage() {
                   </div>
                 )}
 
-                {/* Transporteur */}
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Transporteur</label>
                   <input type="text" value={newOrder.carrier}
@@ -519,23 +624,20 @@ export default function OrdersPage() {
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
 
-                {/* Coûts */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Frais livraison (FCFA)</label>
                   <input type="number" min="0" value={newOrder.delivery_cost}
                     onChange={e => setNewOrder({ ...newOrder, delivery_cost: Number(e.target.value) })}
-                    placeholder="1 500"
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Coût pub (FCFA)</label>
                   <input type="number" min="0" value={newOrder.ad_cost_per_order}
                     onChange={e => setNewOrder({ ...newOrder, ad_cost_per_order: Number(e.target.value) })}
-                    placeholder="500"
                     className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-[#1A5276]" />
                 </div>
 
-                {/* Aperçu total */}
                 {newOrder.product_id && newOrder.quantity > 0 && (() => {
                   const product = products.find(p => p.id === newOrder.product_id);
                   if (!product) return null;
@@ -551,9 +653,7 @@ export default function OrdersPage() {
 
               <div className="pt-4 flex justify-end gap-3 border-t">
                 <button type="button" onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">
-                  Annuler
-                </button>
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">Annuler</button>
                 <button type="submit"
                   className="px-6 py-2.5 bg-[#E67E22] text-white rounded-lg hover:bg-orange-600 font-medium transition">
                   Créer la commande
