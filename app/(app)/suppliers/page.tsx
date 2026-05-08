@@ -412,21 +412,46 @@ export default function SuppliersPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* CORRECTION : empty state */}
+          {/* EMPTY STATE AMÉLIORÉ */}
           {filteredSuppliers.length === 0 ? (
-            <div className="md:col-span-3 text-center py-16 text-gray-400">
-              <User size={40} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">
-                {searchQuery
-                  ? `Aucun fournisseur pour "${searchQuery}"`
-                  : 'Aucun fournisseur enregistré'}
-              </p>
-              <button
-                onClick={() => openModal()}
-                className="mt-4 text-sm text-[#1A5276] hover:underline"
-              >
-                + Ajouter un fournisseur
-              </button>
+            <div className="md:col-span-3">
+              <div className="py-16 px-4 flex flex-col items-center justify-center text-center bg-white rounded-2xl border shadow-sm">
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl flex items-center justify-center mb-5 shadow-sm">
+                  <User size={36} strokeWidth={1.5} className="text-[#1A5276] opacity-70" />
+                </div>
+                {searchQuery ? (
+                  <>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun résultat</h3>
+                    <p className="text-gray-500 text-sm max-w-sm mb-5">
+                      Aucun fournisseur ne correspond à "{searchQuery}".
+                    </p>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+                    >
+                      Effacer la recherche
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun fournisseur enregistré</h3>
+                    <p className="text-gray-500 text-sm max-w-sm leading-relaxed mb-6">
+                      Ajoutez vos fournisseurs pour gérer vos achats, suivre vos dettes et passer des commandes directement depuis l'application.
+                    </p>
+                    <button
+                      onClick={() => openModal()}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-[#1A5276] hover:bg-blue-900 text-white rounded-xl text-sm font-semibold transition shadow-sm"
+                    >
+                      <Plus size={16} /> Ajouter mon premier fournisseur
+                    </button>
+                    <div className="mt-6 bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 max-w-sm">
+                      <p className="text-xs text-orange-700 leading-relaxed">
+                        💡 <span className="font-semibold">Astuce :</span> Pour chaque fournisseur, vous pouvez enregistrer vos achats, payer les dettes progressivement et le contacter directement via WhatsApp.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           ) : (
             filteredSuppliers.map(supplier => (

@@ -444,10 +444,48 @@ export default function OrdersPage() {
                   </div>
                 </td></tr>
               ) : filteredOrders.length === 0 ? (
-                <tr><td colSpan={8} className="text-center p-12 text-gray-400">
-                  <ShoppingBag size={32} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">{searchQuery ? `Aucune commande pour "${searchQuery}"` : 'Aucune commande trouvée'}</p>
-                </td></tr>
+                <tr>
+                  <td colSpan={8}>
+                    {/* ── EMPTY STATE AMÉLIORÉ ──────────────────────────── */}
+                    <div className="py-16 px-4 flex flex-col items-center justify-center text-center">
+                      <div className="w-20 h-20 bg-gradient-to-br from-orange-50 to-amber-100 rounded-2xl flex items-center justify-center mb-5 shadow-sm">
+                        <ShoppingBag size={36} strokeWidth={1.5} className="text-[#E67E22] opacity-70" />
+                      </div>
+                      {(searchQuery || statusFilter !== 'all') ? (
+                        <>
+                          <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun résultat</h3>
+                          <p className="text-gray-500 text-sm max-w-sm mb-5">
+                            Aucune commande ne correspond à votre recherche ou filtre actuel.
+                          </p>
+                          <button
+                            onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
+                            className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+                          >
+                            Réinitialiser les filtres
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="text-lg font-bold text-gray-900 mb-2">Aucune commande pour l'instant</h3>
+                          <p className="text-gray-500 text-sm max-w-sm leading-relaxed mb-6">
+                            Enregistrez vos premières commandes pour suivre vos revenus, gérer vos livraisons et scorer la fiabilité de vos clients.
+                          </p>
+                          <button
+                            onClick={() => { setNewOrder(EMPTY_ORDER); setIsModalOpen(true); }}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-[#E67E22] hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition shadow-sm"
+                          >
+                            <Plus size={16} /> Créer ma première commande
+                          </button>
+                          <div className="mt-6 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 max-w-sm">
+                            <p className="text-xs text-blue-700 leading-relaxed">
+                              💡 <span className="font-semibold">Astuce :</span> Chaque commande marquée "Livrée" déduit automatiquement le stock du produit concerné.
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ) : (
                 filteredOrders.map(order => (
                   <tr key={order.id} className="hover:bg-gray-50 transition-colors">

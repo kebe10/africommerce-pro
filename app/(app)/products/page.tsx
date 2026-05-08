@@ -495,10 +495,51 @@ export default function ProductsPage() {
           {[...Array(4)].map((_, i) => <div key={i} className="h-72 bg-gray-100 rounded-xl animate-pulse" />)}
         </div>
       ) : filteredProducts.length === 0 ? (
-        <div className="py-16 text-center text-gray-400">
-          <Package size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-medium">{searchQuery ? `Aucun produit pour "${searchQuery}"` : 'Aucun produit dans cette sélection'}</p>
-          <button onClick={openAddModal} className="mt-4 text-sm text-[#1A5276] hover:underline">+ Ajouter un produit</button>
+        /* ── EMPTY STATE AMÉLIORÉ ───────────────────────────────────────── */
+        <div className="py-16 px-4 flex flex-col items-center justify-center text-center">
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl flex items-center justify-center mb-5 shadow-sm">
+            <Package size={36} strokeWidth={1.5} className="text-[#1A5276] opacity-70" />
+          </div>
+          {(searchQuery || statusFilter !== 'all' || categoryFilter !== 'all') ? (
+            <>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun résultat</h3>
+              <p className="text-gray-500 text-sm max-w-sm mb-5">
+                Aucun produit ne correspond à votre recherche ou filtre actuel.
+              </p>
+              <button
+                onClick={() => { setSearchQuery(''); setStatusFilter('all'); setCategoryFilter('all'); }}
+                className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+              >
+                Réinitialiser les filtres
+              </button>
+            </>
+          ) : (
+            <>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun produit pour l'instant</h3>
+              <p className="text-gray-500 text-sm max-w-sm leading-relaxed mb-6">
+                Ajoutez vos premiers produits pour gérer votre catalogue, suivre vos stocks et calculer vos marges en temps réel.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={openAddModal}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#1A5276] hover:bg-blue-900 text-white rounded-xl text-sm font-semibold transition shadow-sm"
+                >
+                  <Plus size={16} /> Ajouter mon premier produit
+                </button>
+                <button
+                  onClick={() => router.push('/calculator')}
+                  className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+                >
+                  <Lightbulb size={16} /> Calculer mon prix de vente
+                </button>
+              </div>
+              <div className="mt-6 bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 max-w-sm">
+                <p className="text-xs text-orange-700 leading-relaxed">
+                  💡 <span className="font-semibold">Astuce :</span> Commencez par votre produit le plus vendu. Renseignez le coût d'achat et le prix de vente pour voir instantanément votre marge brute.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

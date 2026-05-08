@@ -6,12 +6,12 @@ import { formatMoney, getWhatsAppLink } from '@/lib/utils';
 import {
   Phone, MapPin, ShieldCheck, AlertTriangle,
   Ban, TrendingUp, MessageCircle, Search,
-  Users, DollarSign, ArrowUpDown
+  Users, DollarSign, ArrowUpDown, Plus
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-// CORRECTION : type explicite, plus de any[]
 type RawOrder = {
   customer_name: string;
   customer_phone: string;
@@ -31,7 +31,7 @@ type Customer = {
   total_spent: number;
   delivered_count: number;
   failed_count: number;
-  success_rate: number; // -1 = pas encore de données closes
+  success_rate: number;
   score: Score;
 };
 
@@ -76,14 +76,12 @@ const SORT_LABELS: Record<SortKey, string> = {
 // ── Composant ─────────────────────────────────────────────────────────────────
 
 export default function CustomersPage() {
+  const router = useRouter();
 
-  // — Données
   const [orders, setOrders]                   = useState<RawOrder[]>([]);
   const [whatsappTemplate, setWhatsappTemplate] = useState(
     'Bonjour {client}, merci pour votre fidélité !'
   );
-
-  // — UI
   const [loading, setLoading]   = useState(true);
   const [filter, setFilter]     = useState<'all' | Score>('all');
   const [search, setSearch]     = useState('');
@@ -95,34 +93,27 @@ export default function CustomersPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-
-      // CORRECTION : Promise.all pour lancer les deux fetches en parallèle
       await Promise.all([fetchOrders(), fetchSettings()]);
-
       setLoading(false);
     };
     init();
   }, []);
 
   async function fetchOrders() {
-    // CORRECTION : gestion d'erreur explicite + type RawOrder
     const { data, error } = await supabase
       .from('orders')
       .select('customer_name, customer_phone, customer_city, status, total_amount')
       .not('customer_phone', 'is', null);
-
     if (error) console.error('Clients — fetch orders:', error.message);
     else if (data) setOrders(data as RawOrder[]);
   }
 
   async function fetchSettings() {
-    // CORRECTION : maybeSingle() au lieu de single() — évite l'erreur si 0 résultat
     const { data } = await supabase
       .from('app_settings')
       .select('whatsapp_customer_message')
       .eq('id', 1)
       .maybeSingle();
-
     if (data?.whatsapp_customer_message) {
       setWhatsappTemplate(data.whatsapp_customer_message);
     }
@@ -146,7 +137,7 @@ export default function CustomersPage() {
           total_spent:     0,
           delivered_count: 0,
           failed_count:    0,
-          success_rate:    -1, // CORRECTION : -1 = pas encore de données closes
+          success_rate:    -1,
           score:           'fiable',
         });
       }
@@ -166,14 +157,11 @@ export default function CustomersPage() {
     const result = Array.from(map.values());
 
     result.forEach(c => {
-      // CORRECTION : taux calculé uniquement sur commandes closes
       const totalClosed = c.delivered_count + c.failed_count;
       c.success_rate = totalClosed > 0
         ? (c.delivered_count / totalClosed) * 100
         : -1;
 
-      // CORRECTION : logique de scoring moins agressive
-      // 1 échec isolé avec bon taux global reste "fiable"
       if (c.failed_count >= 3) {
         c.score = 'bloque';
       } else if (c.success_rate !== -1 && (c.success_rate < 70 || c.failed_count >= 2)) {
@@ -186,9 +174,8 @@ export default function CustomersPage() {
     return result;
   }, [orders]);
 
-  // ── Stats globales ────────────────────────────────────────────────────────
+  // ── Stats ─────────────────────────────────────────────────────────────────
 
-  // CORRECTION : stats complètes incluant fiables et surveiller
   const stats = useMemo(() => ({
     total:      customers.length,
     fiables:    customers.filter(c => c.score === 'fiable').length,
@@ -197,20 +184,17 @@ export default function CustomersPage() {
     totalSpent: customers.reduce((acc, c) => acc + c.total_spent, 0),
   }), [customers]);
 
-  // ── Filtrage + tri + recherche ────────────────────────────────────────────
+  // ── Filtrage + tri ────────────────────────────────────────────────────────
 
   const filteredCustomers = useMemo(() => {
     return customers
       .filter(c => {
-        // CORRECTION : filtre par score
-        const matchScore = filter === 'all' || c.score === filter;
-        // CORRECTION : recherche par nom ou téléphone
+        const matchScore  = filter === 'all' || c.score === filter;
         const matchSearch = search === ''
           || c.name.toLowerCase().includes(search.toLowerCase())
           || c.phone.includes(search);
         return matchScore && matchSearch;
       })
-      // CORRECTION : tri multi-colonnes
       .sort((a, b) => {
         const aVal = sortBy === 'success_rate' && a.success_rate === -1 ? -1 : a[sortBy];
         const bVal = sortBy === 'success_rate' && b.success_rate === -1 ? -1 : b[sortBy];
@@ -247,12 +231,10 @@ export default function CustomersPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Base Clients</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {stats.total} clients uniques identifiés
+            {stats.total} client{stats.total > 1 ? 's' : ''} unique{stats.total > 1 ? 's' : ''} identifié{stats.total > 1 ? 's' : ''}
           </p>
         </div>
-
-        {/* CORRECTION : revenu total généré affiché en haut */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <div className="bg-white border rounded-xl px-4 py-3 flex items-center gap-2 shadow-sm">
             <Users size={16} className="text-[#1A5276]" />
             <div>
@@ -270,63 +252,67 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Filtres par score — CORRECTION : compteurs sur tous les filtres */}
+      {/* Filtres score */}
       <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setFilter('all')}
+        <button onClick={() => setFilter('all')}
           className={`px-4 py-2 rounded-full text-sm font-medium transition ${
             filter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200'
-          }`}
-        >
+          }`}>
           Tous ({stats.total})
         </button>
-
         {(Object.keys(SCORE_CONFIG) as Score[]).map(score => {
           const cfg   = SCORE_CONFIG[score];
-          const count = stats[score === 'fiable' ? 'fiables'
-                            : score === 'surveiller' ? 'surveiller'
-                            : 'bloques'];
+          const count = stats[score === 'fiable' ? 'fiables' : score === 'surveiller' ? 'surveiller' : 'bloques'];
           return (
-            <button
-              key={score}
-              onClick={() => setFilter(score)}
+            <button key={score} onClick={() => setFilter(score)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center gap-1 ${
                 filter === score ? cfg.btnActive : cfg.btn
-              }`}
-            >
+              }`}>
               {cfg.icon} {cfg.label} ({count})
             </button>
           );
         })}
       </div>
 
-      {/* CORRECTION : barre de recherche */}
+      {/* Recherche */}
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Rechercher par nom ou numéro de téléphone..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1A5276]"
-        />
+        <input type="text" placeholder="Rechercher par nom ou numéro de téléphone..."
+          value={search} onChange={e => setSearch(e.target.value)}
+          className="w-full pl-9 pr-10 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1A5276]" />
         {search && (
-          <button
-            onClick={() => setSearch('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
-          >
-            ✕
-          </button>
+          <button onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
         )}
       </div>
 
-      {/* Tableau clients */}
+      {/* Tableau */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         {loading ? (
           <div className="p-8 space-y-3 animate-pulse">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-14 bg-gray-100 rounded" />
-            ))}
+            {[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-gray-100 rounded" />)}
+          </div>
+        ) : customers.length === 0 ? (
+          /* ── EMPTY STATE — Aucun client (pas encore de commandes) ───────── */
+          <div className="py-16 px-4 flex flex-col items-center justify-center text-center">
+            <div className="w-20 h-20 bg-gradient-to-br from-green-50 to-emerald-100 rounded-2xl flex items-center justify-center mb-5 shadow-sm">
+              <Users size={36} strokeWidth={1.5} className="text-green-600 opacity-70" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun client pour l'instant</h3>
+            <p className="text-gray-500 text-sm max-w-sm leading-relaxed mb-6">
+              Vos clients apparaissent automatiquement dès que vous enregistrez des commandes. Chaque client reçoit un score de fiabilité basé sur son historique de livraisons.
+            </p>
+            <button
+              onClick={() => router.push('/orders')}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#1A5276] hover:bg-blue-900 text-white rounded-xl text-sm font-semibold transition shadow-sm"
+            >
+              <Plus size={16} /> Créer une première commande
+            </button>
+            <div className="mt-6 bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 max-w-sm">
+              <p className="text-xs text-orange-700 leading-relaxed">
+                💡 <span className="font-semibold">Le scoring client :</span> un client avec 3 échecs ou moins de 70% de livraisons réussies passe automatiquement en "À surveiller" ou "Bloqué".
+              </p>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -335,32 +321,38 @@ export default function CustomersPage() {
                 <tr>
                   <th className="p-4 text-left">Client</th>
                   <th className="p-4 text-left">Ville</th>
-
-                  {/* CORRECTION : en-têtes de colonnes cliquables pour le tri */}
                   {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
                     <th key={key} className="p-4 text-center">
-                      <button
-                        onClick={() => handleSort(key)}
-                        className="inline-flex items-center gap-1 hover:text-gray-800 transition"
-                      >
+                      <button onClick={() => handleSort(key)}
+                        className="inline-flex items-center gap-1 hover:text-gray-800 transition">
                         {SORT_LABELS[key]}
                         <ArrowUpDown size={12} className={sortBy === key ? 'text-[#1A5276]' : 'text-gray-300'} />
                       </button>
                     </th>
                   ))}
-
                   <th className="p-4 text-center">Score</th>
                   <th className="p-4 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filteredCustomers.length === 0 ? (
+                  /* ── EMPTY STATE — Filtre/recherche sans résultat ─────── */
                   <tr>
-                    <td colSpan={7} className="text-center p-12 text-gray-400">
-                      <Users size={32} className="mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">
-                        {search ? `Aucun client trouvé pour "${search}"` : 'Aucun client trouvé.'}
-                      </p>
+                    <td colSpan={7}>
+                      <div className="py-12 flex flex-col items-center justify-center text-center">
+                        <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-3">
+                          <Search size={24} strokeWidth={1.5} className="text-gray-300" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-500 mb-1">
+                          {search ? `Aucun client pour "${search}"` : `Aucun client dans la catégorie "${SCORE_CONFIG[filter as Score]?.label}"`}
+                        </p>
+                        <button
+                          onClick={() => { setSearch(''); setFilter('all'); }}
+                          className="text-xs text-[#1A5276] hover:underline mt-2"
+                        >
+                          Voir tous les clients
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -368,8 +360,6 @@ export default function CustomersPage() {
                     const cfg = SCORE_CONFIG[customer.score];
                     return (
                       <tr key={customer.phone} className="hover:bg-gray-50 transition-colors">
-
-                        {/* Client */}
                         <td className="p-4">
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
@@ -387,16 +377,12 @@ export default function CustomersPage() {
                             </div>
                           </div>
                         </td>
-
-                        {/* Ville */}
                         <td className="p-4 text-gray-600">
                           <div className="flex items-center gap-1 text-sm">
                             <MapPin size={13} className="text-gray-400 shrink-0" />
                             {customer.city}
                           </div>
                         </td>
-
-                        {/* Commandes */}
                         <td className="p-4 text-center">
                           <span className="font-semibold text-gray-900">{customer.total_orders}</span>
                           <div className="text-xs text-gray-400 mt-0.5">
@@ -406,35 +392,19 @@ export default function CustomersPage() {
                             )}
                           </div>
                         </td>
-
-                        {/* Total dépensé */}
                         <td className="p-4 text-center">
-                          <span className="font-semibold text-green-700">
-                            {formatMoney(customer.total_spent)}
-                          </span>
+                          <span className="font-semibold text-green-700">{formatMoney(customer.total_spent)}</span>
                         </td>
-
-                        {/* Taux succès — CORRECTION : N/A si pas de données closes */}
-                        <td className="p-4 text-center">
-                          {getSuccessRateDisplay(customer.success_rate)}
-                        </td>
-
-                        {/* Score — CORRECTION : via SCORE_CONFIG, plus de ternaires imbriqués */}
+                        <td className="p-4 text-center">{getSuccessRateDisplay(customer.success_rate)}</td>
                         <td className="p-4 text-center">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${cfg.badge}`}>
                             {cfg.icon} {cfg.label}
                           </span>
                         </td>
-
-                        {/* Action WhatsApp */}
                         <td className="p-4 text-center">
                           <a
-                            href={getWhatsAppLink(
-                              customer.phone,
-                              whatsappTemplate.replace('{client}', customer.name)
-                            )}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href={getWhatsAppLink(customer.phone, whatsappTemplate.replace('{client}', customer.name))}
+                            target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-full hover:bg-green-100 text-xs font-medium border border-green-200 transition"
                           >
                             <MessageCircle size={13} /> WhatsApp
@@ -447,7 +417,6 @@ export default function CustomersPage() {
               </tbody>
             </table>
 
-            {/* Pied de tableau */}
             {filteredCustomers.length > 0 && (
               <div className="px-4 py-3 border-t bg-gray-50 text-xs text-gray-400 flex justify-between">
                 <span>{filteredCustomers.length} client{filteredCustomers.length > 1 ? 's' : ''} affiché{filteredCustomers.length > 1 ? 's' : ''}</span>
